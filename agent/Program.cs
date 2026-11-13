@@ -56,15 +56,16 @@ Console.WriteLine($"Connection saved in {configPath}");
 await app.RunAsync();
 
 record Connection(int Port, string Token);
-record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total);
-record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError);
+record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total, float? Pump = null, float? SideFan = null, string? FanName = null, string? PumpName = null, bool CoolingProfile = false, float? UsableTotal = null);
+record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null);
 sealed class Telemetry : BackgroundService
 {
     private Snapshot? snapshot;
     public Snapshot? Snapshot => Volatile.Read(ref snapshot);
     protected override async Task ExecuteAsync(CancellationToken stop)
     {
-        var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true };
+        var installedMemory = PhysicalMemoryInfo.InstalledGiB();
+        var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true, IsMotherboardEnabled = true };
         try { computer.Open(); }
         catch (Exception ex) { Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, null, null, null, ex.Message)); return; }
         while (!stop.IsCancellationRequested)
@@ -76,8 +77,14 @@ sealed class Telemetry : BackgroundService
                 var gpu = computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia)
                     ?? computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuAmd)
                     ?? computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuIntel);
-                var ram = computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Memory);
-                Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, Read(cpu), Read(gpu), Read(ram), null));
+                var ram = SensorMapping.PhysicalMemory(computer.Hardware);
+                var cooling = SensorMapping.ReadCooling(computer.Hardware);
+                var processor = Read(cpu);
+                if (processor != null) processor = processor with {
+                    Fan = cooling.Radiator?.Rpm, Pump = cooling.Pump?.Rpm, SideFan = cooling.Side?.Rpm,
+                    FanName = cooling.Radiator?.Name, PumpName = cooling.Pump?.Name, CoolingProfile = cooling.WorkstationProfile
+                };
+                Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, processor, Read(gpu), PhysicalMemoryInfo.WithInstalledCapacity(Read(ram), installedMemory), null, cooling));
             }
             catch (Exception ex)
             {
@@ -86,7 +93,10 @@ sealed class Telemetry : BackgroundService
             }
             try { await Task.Delay(1000, stop); } catch (OperationCanceledException) { break; }
         }
-        computer.Close();
+        // LHM 0.9.6 SuperIOHardware.Close restores control modes even for a read-only
+        // monitor. Do not invoke that path alongside Fan Control. This worker lives
+        // for the entire agent process; Windows reclaims its handles when it exits.
+        // No Sensor.Control / SetSoftware / SetDefault calls are made by this agent.
     }
     private static void Update(IHardware hardware)
     {

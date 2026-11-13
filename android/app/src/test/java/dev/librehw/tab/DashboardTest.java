@@ -27,6 +27,13 @@ public class DashboardTest {
             view.accept(data,"",true);
         }
         render(view,"jade"); view.eva=true; render(view,"eva");
+        for (int load : new int[] {1,12,100}) {
+            data.getJSONObject("cpu").put("load",load);
+            data.getJSONObject("gpu").put("load",load);
+            view.accept(data,"",true);
+            assertLoadCentered(view);
+            render(view,"load-"+load);
+        }
         data.getJSONObject("cpu").put("temperature",100).put("load",100);
         view.accept(data,"",true); render(view,"hot");
         view.accept(null,"ПК выключен",false); render(view,"offline");
@@ -36,6 +43,24 @@ public class DashboardTest {
         view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,dx+1080*scale,45*scale,0));
         view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,dx+900*scale,45*scale,0));
         assertEquals(1,clicks[0]); assertEquals(1,clicks[1]);
+    }
+    private void assertLoadCentered(DashboardView view) {
+        Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);
+        view.draw(new Canvas(bitmap));
+        float scale=800f/760f, dx=(1340-1200*scale)/2;
+        for (float cardX : new float[] {36,610}) {
+            float center=dx+(cardX+424)*scale;
+            int min=1340,max=0;
+            for (int y=(int)((125+148)*scale);y<(125+205)*scale;y++) {
+                for (int x=(int)(center-65*scale);x<center+65*scale;x++) {
+                    int color=bitmap.getPixel(x,y);
+                    if(Color.red(color)>210 && Color.green(color)>210 && Color.blue(color)>210) { min=Math.min(min,x); max=Math.max(max,x); }
+                }
+            }
+            assertTrue("Numeral must be present",max>min);
+            assertEquals("Load numeral must be centered in its gauge",center,(min+max)/2f,5*scale);
+        }
+        bitmap.recycle();
     }
     private void render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);

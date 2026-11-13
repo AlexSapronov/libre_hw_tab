@@ -104,14 +104,34 @@ public final class DashboardView extends View {
         RectF arc = new RectF(x+348,y+112,x+500,y+264); c.drawArc(arc,140,260,false,p);
         if (Float.isFinite(load)) { p.setColor(color); c.drawArc(arc,140,260*Math.max(0,Math.min(1,load/100)),false,p); }
         p.setStrokeCap(Paint.Cap.BUTT); p.setStyle(Paint.Style.FILL);
-        text(c,number(load),x+383,y+201,46,white,digits); text(c,"% LOAD",x+395,y+225,11,muted,medium);
+        loadLabel(c, x+424, y+188, load);
         line(c,x+24,y+252,x+310,y+252,0xFF263446,1);
-        stat(c,x+24,y+278,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
-        stat(c,x+193,y+278,"МОЩНОСТЬ",number(value(data,"power"))+" W");
-        stat(c,x+367,y+293,"ВЕНТИЛЯТОР",number(value(data,"fan"))+" RPM");
+        if (series == 0) {
+            stat(c,x+24,y+280,"ЧАСТОТА",number(value(data,"clock"))+" MHz",18);
+            stat(c,x+130,y+280,"МОЩНОСТЬ",number(value(data,"power"))+" W",18);
+            boolean profile = data != null && data.optBoolean("coolingProfile");
+            stat(c,x+236,y+280,profile ? "ВЕРХ / AIO" : "CPU / AIO",number(value(data,"fan"))+" RPM",18);
+            stat(c,x+342,y+280,"БОК / ВДУВ",number(value(data,"sideFan"))+" RPM",18);
+            stat(c,x+448,y+280,"ПОМПА",number(value(data,"pump"))+" RPM",18);
+        } else {
+            stat(c,x+24,y+278,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
+            stat(c,x+193,y+278,"МОЩНОСТЬ",number(value(data,"power"))+" W");
+            stat(c,x+367,y+293,"ВЕНТИЛЯТОР",number(value(data,"fan"))+" RPM");
+        }
     }
-    private void stat(Canvas c,float x,float y,String title,String val) {
-        text(c,title,x,y,10,muted,medium); text(c,val,x,y+26,21,white,regular);
+    private void loadLabel(Canvas c, float centerX, float centerY, float load) {
+        p.setTypeface(digits); p.setTextSize(46); Paint.FontMetrics big = p.getFontMetrics();
+        p.setTypeface(medium); p.setTextSize(11); Paint.FontMetrics small = p.getFontMetrics();
+        float height = big.descent-big.ascent + 6 + small.descent-small.ascent;
+        float top = centerY-height/2;
+        p.setTextAlign(Paint.Align.CENTER);
+        text(c,number(load),centerX,top-big.ascent,46,white,digits);
+        text(c,"% LOAD",centerX,top+big.descent-big.ascent+6-small.ascent,11,muted,medium);
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+    private void stat(Canvas c,float x,float y,String title,String val) { stat(c,x,y,title,val,21); }
+    private void stat(Canvas c,float x,float y,String title,String val,float size) {
+        text(c,title,x,y,10,muted,medium); text(c,val,x,y+26,size,white,regular);
     }
     private void memory(Canvas c) {
         box(c,36,469,344,221,0xFF101B29);
