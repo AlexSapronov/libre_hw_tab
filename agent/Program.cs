@@ -6,6 +6,15 @@ using System.Text;
 using System.Text.Json;
 using LibreHardwareMonitor.Hardware;
 
+if (args.Contains("--pair") || args.Contains("--pair-test"))
+{
+    var thread = new Thread(() => PairingWindow.Run(args.Contains("--pair-test")));
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+    return;
+}
+
 using var singleton = new Mutex(true, "Local\\LibreHwTabAgent", out var first);
 if (!first) return;
 var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LibreHwTab");
