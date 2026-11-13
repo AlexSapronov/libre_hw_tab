@@ -4,10 +4,14 @@ using System.Text;
 
 internal static class ForegroundWindow
 {
+    private static IntPtr cachedWindow;
+    private static DateTimeOffset cachedUntil;
+    private static ForegroundApp? cached;
     internal static ForegroundApp? Read()
     {
         try {
             var hwnd=GetForegroundWindow(); if(hwnd==IntPtr.Zero) return null;
+            if(hwnd==cachedWindow && DateTimeOffset.UtcNow<cachedUntil)return cached;
             GetWindowThreadProcessId(hwnd,out var pid);
             using var process=Process.GetProcessById((int)pid);
             string path=""; try {path=process.MainModule?.FileName ?? "";} catch {}
@@ -16,7 +20,8 @@ internal static class ForegroundWindow
             bool full=GetWindowRect(hwnd,out var rect) && GetMonitorInfo(MonitorFromWindow(hwnd,2),ref info)
                 && rect.Right-rect.Left >= (info.Monitor.Right-info.Monitor.Left)*.8
                 && rect.Bottom-rect.Top >= (info.Monitor.Bottom-info.Monitor.Top)*.8;
-            return new((int)pid,process.ProcessName+".exe",path,title.ToString(),full);
+            cachedWindow=hwnd;cachedUntil=DateTimeOffset.UtcNow.AddSeconds(1);
+            return cached=new((int)pid,process.ProcessName+".exe",path,title.ToString(),full);
         } catch {return null;}
     }
     internal static bool Alive(int? pid) {try {if(pid==null)return false;using var p=Process.GetProcessById(pid.Value);return !p.HasExited;}catch{return false;}}

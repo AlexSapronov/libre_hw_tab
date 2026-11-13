@@ -52,13 +52,18 @@ internal sealed class GamingService : BackgroundService
     private static async Task DrainErrors(StreamReader reader,CancellationToken stop) {while(await reader.ReadLineAsync(stop)!=null){} }
     private async Task Poll(string rulesPath,CancellationToken stop)
     {
+        DateTimeOffset nextRules=DateTimeOffset.MinValue;
+        using var timer=new PeriodicTimer(TimeSpan.FromMilliseconds(200));
         while(!stop.IsCancellationRequested) {
-            try {rules=JsonSerializer.Deserialize<GameRules>(await File.ReadAllTextAsync(rulesPath,stop),new JsonSerializerOptions{PropertyNameCaseInsensitive=true}) ?? new();}catch(OperationCanceledException)when(stop.IsCancellationRequested){throw;}catch{}
+            if(DateTimeOffset.UtcNow>=nextRules) {
+                nextRules=DateTimeOffset.UtcNow.AddSeconds(1);
+                try {rules=JsonSerializer.Deserialize<GameRules>(await File.ReadAllTextAsync(rulesPath,stop),new JsonSerializerOptions{PropertyNameCaseInsensitive=true}) ?? new();}catch(OperationCanceledException)when(stop.IsCancellationRequested){throw;}catch{}
+            }
             var app=ForegroundWindow.Read();var now=DateTimeOffset.UtcNow;
             GameView next;
             lock(gate)next=detector.Update(app,app==null?null:history.ForProcess(app.Pid,now),now,ForegroundWindow.Alive(detector.ActivePid),rules);
             Volatile.Write(ref view,next);
-            await Task.Delay(1000,stop);
+            if(!await timer.WaitForNextTickAsync(stop))break;
         }
     }
 }

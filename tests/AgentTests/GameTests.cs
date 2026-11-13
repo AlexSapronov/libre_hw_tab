@@ -49,4 +49,33 @@ public class GameTests
         Assert.Null(history.ForProcess(42,now.AddSeconds(3)));Assert.Null(history.ForProcess(99,now));
         history.Clear();Assert.Null(history.ForProcess(42,now));
     }
+    [Fact] public void SixtySecondChartHasFixedTimeAxisAtDifferentFpsAndPreservesOldSpikes()
+    {
+        double?[][] plots=new double?[2][]; int test=0;
+        foreach(int fps in new[]{120,240}) {
+            var history=new FrameHistory();
+            for(int i=0;i<=60*fps;i++) {
+                double time=i/(double)fps;
+                history.Add(new("wow.exe",42,"main",time,i==(int)(fps*10.05)?80:1000.0/fps),now.AddSeconds(time));
+            }
+            var view=history.ForProcess(42,now.AddSeconds(60))!;
+            plots[test++]=view.FrameSeries!;
+            Assert.Equal(60,view.HistorySeconds);Assert.Equal(200,view.BucketMs);Assert.Equal(300,view.FrameSeries!.Length);
+            Assert.Equal(80d,view.FrameSeries.Max());Assert.Equal(80d,view.FrameSeries[49]);
+            Assert.InRange(view.Low1!.Value,fps-1,fps+1); // old spike is in chart, outside the 10-second low window
+        }
+        Assert.Equal(Array.IndexOf(plots[0],80d),Array.IndexOf(plots[1],80d));
+    }
+    [Fact] public void MissingTimeBucketsAreGapsAndDoNotStretchNewDataAcrossTheChart()
+    {
+        var history=new FrameHistory();
+        for(int i=0;i<60;i++)history.Add(new("wow.exe",42,"main",i/60.0,16.67),now.AddSeconds(i/60.0));
+        for(int i=0;i<60;i++)history.Add(new("wow.exe",42,"main",10+i/60.0,16.67),now.AddSeconds(10+i/60.0));
+        var view=history.ForProcess(42,now.AddSeconds(11))!;
+        Assert.Equal(300,view.FrameSeries!.Length);
+        Assert.Null(view.FrameSeries[270]);
+        Assert.NotNull(view.FrameSeries[^1]);
+        Assert.All(view.FrameSeries.Take(240),value=>Assert.Null(value));
+    }
+
 }
