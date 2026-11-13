@@ -82,6 +82,14 @@ public class StandbyLayoutTest {
         assertEquals("FPS",DashboardView.low01Status(new JSONObject("{low01:94,low01Samples:1500}")));
         assertEquals("ПАУЗА",DashboardView.low01Status(new JSONObject("{low01:null,paused:true}")));
     }
+    @Test public void TomorrowForecastRendersInStandbyWithBothProvidersAndMissingValues() throws Exception {
+        DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;view.forceStandby=true;
+        view.weather=WeatherClient.fetch("Санкт-Петербург",60,30,url->WeatherClientTest.primaryForecast());
+        view.nextAlarm="пн, 07:30";view.themeId=6;render(view,"standby-forecast-nerv");view.themeId=0;render(view,"standby-forecast-jade");
+        view.weather.put("source","wttr.in");for(int i=0;i<3;i++)view.weather.getJSONArray("forecast").getJSONObject(i).put("precipitationHours",3);
+        view.themeId=6;render(view,"standby-forecast-wttr");
+        view.weather.remove("forecast");render(view,"standby-forecast-missing");
+    }
     private void render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));
         File folder=new File("build/screenshots");folder.mkdirs();try(FileOutputStream out=new FileOutputStream(new File(folder,name+".png"))){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));}bitmap.recycle();

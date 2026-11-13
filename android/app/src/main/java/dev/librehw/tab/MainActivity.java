@@ -255,7 +255,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         try {
             JSONObject cached=dashboard.weather;
             long age=cached==null?Long.MAX_VALUE:System.currentTimeMillis()-cached.optLong("fetched");
-            if(!forced && cached!=null && city.equals(cached.optString("city")) && age>=0 && age<900000)return;
+            if(!forced && cached!=null && cached.optInt("forecastVersion")==1 && city.equals(cached.optString("city")) && age>=0 && age<900000)return;
             double lat=Double.parseDouble(preferences.getString("weather_lat","59.9386")),lon=Double.parseDouble(preferences.getString("weather_lon","30.3141"));
             JSONObject data=WeatherClient.fetch(city,lat,lon);
             if(!city.equals(preferences.getString("weather_city","Санкт-Петербург")))return;

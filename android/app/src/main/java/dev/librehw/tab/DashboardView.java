@@ -35,7 +35,7 @@ public final class DashboardView extends View {
     private float downX,downY;
     private final Map<String,RectF> drawnCards=new LinkedHashMap<>();
     private final RectF menuHit=new RectF(312,20,396,86);
-    private final RectF clockBack=new RectF(36,40,230,95),clockAlarm=new RectF(700,545,1164,635),clockWeather=new RectF(700,250,1164,510),clockWake=new RectF(36,560,600,695);
+    private final RectF clockBack=new RectF(36,40,230,95),clockAlarm=new RectF(700,545,1164,635),clockWeather=new RectF(700,140,1164,540),clockWake=new RectF(36,560,600,695);
     public void suppressStandby(){forceStandby=false;suppressedUntil=android.os.SystemClock.elapsedRealtime()+30000;invalidate();}
     public boolean standby(){return !editing && (forceStandby || (autoStandby && sample==null && android.os.SystemClock.elapsedRealtime()-lastGood>=15000 && android.os.SystemClock.elapsedRealtime()>suppressedUntil));}
     public boolean playing(){return mode==2 || (mode==0 && object("game")!=null && object("game").optBoolean("active"));}
@@ -334,17 +334,18 @@ public final class DashboardView extends View {
         text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
         text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",new Locale("ru"))),60,455,25,muted,regular);
         String city=weather==null?weatherCity:weather.optString("city","Санкт-Петербург");
-        fit(c,city,730,265,25,400,white);
-        if(weather==null){fit(c,weatherStatus,730,335,22,410,muted);fit(c,weatherHint,730,385,13,410,muted);}
+        fit(c,city,730,175,25,410,white);
+        if(weather==null){fit(c,weatherStatus,730,255,22,410,muted);fit(c,weatherHint,730,305,13,410,muted);}
         else {
-            valueWithUnit(c,number(value(weather,"temperature")),730,355,78,"°C",24,22,accent);
-            fit(c,weather.optString("summary",WeatherClient.description(weather.optInt("code"))),730,408,24,410,muted);
+            valueWithUnit(c,number(value(weather,"temperature")),730,250,64,"°C",24,22,accent);
+            fit(c,weather.optString("summary",WeatherClient.description(weather.optInt("code"))),730,290,20,410,muted);
             long age=System.currentTimeMillis()-weather.optLong("fetched",0);
             String source=weather.optString("source","Open-Meteo");
-            fit(c,(age>900000?"Сохранено · ":"")+source+" · нажми для обновления",730,447,12,410,muted);
+            fit(c,(age>900000?"Сохранено · ":"")+source+" · нажми для обновления",730,319,11,410,muted);
         }
-        line(c,730,493,1142,493,0xFF263446,1);
-        text(c,"БУДИЛЬНИК  +",730,553,13,accent,medium);fit(c,nextAlarm,730,600,23,410,white);
+        drawForecast(c);
+        line(c,730,543,1142,543,0xFF263446,1);
+        text(c,"БУДИЛЬНИК  +",730,575,13,accent,medium);fit(c,nextAlarm,730,615,23,410,white);
         boolean waking=android.os.SystemClock.elapsedRealtime()<wakeSentUntil;
         int powerColor=nerv?0xFFFFB52E:accent;
         box(c,32,556,572,143,powerColor);
@@ -356,6 +357,33 @@ public final class DashboardView extends View {
         text(c,waking?"КОМАНДА ОТПРАВЛЕНА":"ВКЛЮЧИТЬ ПК",145,618,28,ink,medium);
         text(c,waking?"ЖДУ ПОДКЛЮЧЕНИЯ…":"ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN",145,654,13,ink,regular);
         fit(c,sample==null?"ПК недоступен · "+error:"Соединение с ПК активно",60,738,12,1080,muted);
+    }
+    private void drawForecast(Canvas c) {
+        String date=weather==null?"":weather.optString("forecastDate","");
+        String heading="ЗАВТРА";
+        if(!date.isEmpty())try {
+            java.time.LocalDate target=java.time.LocalDate.parse(date);
+            java.time.ZoneId zone=java.time.ZoneId.systemDefault();
+            try{zone=java.time.ZoneId.of(weather.optString("forecastZone",""));}catch(Exception ignored){}
+            heading=(target.equals(java.time.LocalDate.now(zone).plusDays(1))?"ЗАВТРА":"ПРОГНОЗ")+" · "+target.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"));
+        }catch(Exception ignored){}
+        text(c,heading,730,356,13,accent,medium);
+        JSONArray slots=weather==null?null:weather.optJSONArray("forecast");
+        String[] labels={"УТРО","ДЕНЬ","ВЕЧЕР"};int[] hours={9,15,21};
+        for(int n=0;n<3;n++) {
+            float x=730+n*141;box(c,x,370,130,154,panel);
+            text(c,labels[n]+" · "+hours[n]+":00",x+9,391,10,accent,medium);
+            JSONObject slot=null;if(slots!=null)for(int i=0;i<slots.length();i++){JSONObject candidate=slots.optJSONObject(i);if(candidate!=null&&candidate.optInt("hour")==hours[n]){slot=candidate;break;}}
+            if(slot==null){text(c,"—",x+10,432,28,white,digits);text(c,"Нет прогноза",x+9,460,11,muted,regular);continue;}
+            text(c,number(value(slot,"temperature"))+"°",x+10,432,30,white,digits);
+            String summary=slot.optString("summary","Нет данных");
+            if(summary.length()>19)summary=summary.substring(0,18)+"…";
+            fit(c,summary,x+9,457,12,112,muted);
+            float probability=value(slot,"probability");
+            text(c,"Осадки "+(Float.isNaN(probability)?"—":number(probability)+"%"),x+9,483,12,accent,regular);
+            float precipitation=value(slot,"precipitation");
+            text(c,(Float.isNaN(precipitation)?"—":decimal(precipitation))+" мм/"+(slot.optInt("precipitationHours",1)==3?"3ч":"ч"),x+9,507,11,muted,regular);
+        }
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
