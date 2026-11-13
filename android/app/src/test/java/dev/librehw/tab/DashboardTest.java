@@ -25,8 +25,9 @@ public class DashboardTest {
             data.getJSONObject("cpu").put("temperature",58+Math.sin(i/15.0)*8);
             data.getJSONObject("gpu").put("temperature",65+Math.sin(i/19.0)*6);
             view.accept(data,"",true);
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(1));
         }
-        render(view,"jade"); view.eva=true; render(view,"eva");
+        render(view,"jade"); view.themeId=1; render(view,"eva");
         for (int load : new int[] {1,12,100}) {
             data.getJSONObject("cpu").put("load",load);
             data.getJSONObject("gpu").put("load",load);
@@ -40,8 +41,13 @@ public class DashboardTest {
         data.getJSONObject("gpu").put("temperature",65).put("load",94);
         data.getJSONObject("game").put("active",true);
         view.accept(data,"",true); render(view,"game-eva");
-        view.eva=false; render(view,"game-jade");
-        data.getJSONObject("game").put("paused",true).put("fps",org.json.JSONObject.NULL).put("frames",new org.json.JSONArray());
+        view.themeId=0; render(view,"game-jade");
+        for(int theme=0;theme<DashboardTheme.ALL.length;theme++) {
+            view.themeId=theme;view.mode=0;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-game");
+            view.mode=1;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-overview");
+        }
+        view.themeId=0;view.mode=0;
+        data.getJSONObject("game").put("paused",true).put("fps",org.json.JSONObject.NULL).put("frames",new org.json.JSONArray()).put("frameSeries",new org.json.JSONArray());
         view.accept(data,"",true);render(view,"game-paused");
         view.mode=1;render(view,"game-overview-override");view.mode=0;
         view.accept(null,"ПК выключен",false); render(view,"offline");

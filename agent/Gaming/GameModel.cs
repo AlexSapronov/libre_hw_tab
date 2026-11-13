@@ -5,7 +5,7 @@ using System.Text.Json;
 internal record FrameSample(string Application, int Pid, string Chain, double Time, double Ms);
 internal record ForegroundApp(int Pid, string Exe, string Path, string Title, bool Fullscreen);
 internal record GameView(bool Active, string Status, string? Name = null, int? Pid = null, double? Fps = null,
-    double? FrameTime = null, double? Low1 = null, double[]? Frames = null, bool Paused = false, string? SourceId = null);
+    double? FrameTime = null, double? Low1 = null, double[]? Frames = null, bool Paused = false, string? SourceId = null, double?[]? FrameSeries = null, int HistorySeconds = 60, int BucketMs = 200);
 internal record GameRules(string[]? Include = null, string[]? Exclude = null);
 
 internal sealed class PresentCsv
@@ -41,21 +41,27 @@ internal sealed class PresentCsv
 internal sealed class FrameHistory
 {
     private readonly Dictionary<(int,string),List<(FrameSample Frame,DateTimeOffset Received)>> buffers=new();
+    private readonly Dictionary<(int,string),SortedDictionary<long,double>> peaks=new();
     private DateTimeOffset nextPrune;
     internal void Add(FrameSample frame,DateTimeOffset now)
     {
         if(now>=nextPrune) {
-            foreach(var key in buffers.Where(k=>now-k.Value[^1].Received>TimeSpan.FromSeconds(12)).Select(k=>k.Key).ToArray()) buffers.Remove(key);
+            foreach(var key in buffers.Where(k=>now-k.Value[^1].Received>TimeSpan.FromSeconds(12)).Select(k=>k.Key).ToArray()) { buffers.Remove(key); peaks.Remove(key); }
             nextPrune=now.AddSeconds(5);
         }
         var key2=(frame.Pid,frame.Chain);
         if(!buffers.TryGetValue(key2,out var list)) {
-            if(buffers.Count>=32) buffers.Remove(buffers.MinBy(k=>k.Value[^1].Received).Key);
+            if(buffers.Count>=32) { var oldest=buffers.MinBy(k=>k.Value[^1].Received).Key; buffers.Remove(oldest);peaks.Remove(oldest); }
+            peaks[key2]=new();
             buffers[key2]=list=new();
         }
-        if(list.Count>0 && !list[^1].Frame.Application.Equals(frame.Application,StringComparison.OrdinalIgnoreCase)) list.Clear();
+        if(list.Count>0 && !list[^1].Frame.Application.Equals(frame.Application,StringComparison.OrdinalIgnoreCase)) {list.Clear();peaks[key2].Clear();}
         if(list.Count>0 && frame.Time<=list[^1].Frame.Time) return;
         list.Add((frame,now));
+        long bucket=(long)Math.Floor(frame.Time*5);
+        var chart=peaks[key2];
+        chart[bucket]=chart.TryGetValue(bucket,out var peak)?Math.Max(peak,frame.Ms):frame.Ms;
+        while(chart.Count>0 && chart.First().Key<bucket-299)chart.Remove(chart.First().Key);
         int remove=0;
         while(remove<list.Count && (frame.Time-list[remove].Frame.Time>10 || list.Count-remove>16384)) remove++;
         if(remove>0) list.RemoveRange(0,remove);
@@ -71,10 +77,13 @@ internal sealed class FrameHistory
         var all=list.Select(f=>f.Frame.Ms).ToArray();
         double? low=all.Length>=60 && last.Time-list[0].Frame.Time>=1
             ? 1000/all.OrderByDescending(v=>v).Take(Math.Max(1,(int)Math.Ceiling(all.Length*.01))).Average() : null;
+        long latestBucket=(long)Math.Floor(last.Time*5);
+        var chart=peaks[(pid,last.Chain)];
+        var series=Enumerable.Range(0,300).Select(i=>chart.TryGetValue(latestBucket-299+i,out var peak)?(double?)peak:null).ToArray();
         return new(false,"ready",last.Application,pid,1000/recent.Average(),recent.Average(),low,
-            all.TakeLast(180).ToArray(),false,$"{pid}:{last.Chain}");
+            all.TakeLast(180).ToArray(),false,$"{pid}:{last.Chain}",series);
     }
-    internal void Clear() => buffers.Clear();
+    internal void Clear() {buffers.Clear();peaks.Clear();}
 }
 
 internal sealed class GameDetector
@@ -110,7 +119,7 @@ internal sealed class GameDetector
             }
         } else { candidate=0; }
         if(active!=null && activeAlive && now-lastFocused<TimeSpan.FromSeconds(10))
-            return active with {Fps=null,FrameTime=null,Low1=null,Frames=Array.Empty<double>(),Paused=true};
+            return active with {Fps=null,FrameTime=null,Low1=null,Frames=Array.Empty<double>(),FrameSeries=Array.Empty<double?>(),Paused=true};
         active=null; return new(false,"idle");
     }
     internal int? ActivePid => active?.Pid;

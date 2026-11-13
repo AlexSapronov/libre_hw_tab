@@ -36,7 +36,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         address = preferences.getString("address", "");
         token = preferences.getString("token", "");
         dashboard = new DashboardView(this, this::settings, this::toggleTheme);
-        dashboard.eva = preferences.getBoolean("eva", false);
+        dashboard.themeId = preferences.getInt("theme_id",preferences.getBoolean("eva", false)?1:0);
         dashboard.mode = Math.max(0, Math.min(2, preferences.getInt("mode", 0)));
         dashboard.onModeChange = () -> {
             dashboard.mode=(dashboard.mode+1)%3;
@@ -53,9 +53,13 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
     private void toggleTheme() {
-        dashboard.eva = !dashboard.eva;
-        preferences.edit().putBoolean("eva", dashboard.eva).apply();
-        dashboard.invalidate();
+        String[] labels = new String[DashboardTheme.ALL.length];
+        for(int i=0;i<labels.length;i++)labels[i]=DashboardTheme.ALL[i].description;
+        new AlertDialog.Builder(this).setTitle("Оформление")
+            .setSingleChoiceItems(labels,dashboard.themeId,(dialog,which)->{
+                dashboard.themeId=which; preferences.edit().putInt("theme_id",which).apply();
+                dashboard.invalidate(); dialog.dismiss();
+            }).setNegativeButton("Закрыть",null).show();
     }
     private void stop() {
         generation++;
@@ -67,7 +71,14 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         if (!active) return;
         final int current = generation;
         worker = Executors.newSingleThreadScheduledExecutor();
-        worker.scheduleWithFixedDelay(() -> poll(current), 0, 1, TimeUnit.SECONDS);
+        worker.scheduleAtFixedRate(new Runnable() {
+            private long lastStart=-1000;
+            public void run() {
+                long now=android.os.SystemClock.elapsedRealtime();
+                if(now-lastStart<180)return; // Skip overdue slots after a slow request; never burst.
+                lastStart=now; poll(current);
+            }
+        }, 0, 200, TimeUnit.MILLISECONDS);
     }
     private void poll(int current) {
         JSONObject sample = null;

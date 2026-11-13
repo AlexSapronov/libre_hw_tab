@@ -70,11 +70,19 @@ sealed class Telemetry : BackgroundService
         var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true, IsMotherboardEnabled = true };
         try { computer.Open(); }
         catch (Exception ex) { Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, null, null, null, ex.Message)); return; }
+        DateTimeOffset nextBoard=DateTimeOffset.MinValue;
+        using var sensorTimer=new PeriodicTimer(TimeSpan.FromMilliseconds(200));
         while (!stop.IsCancellationRequested)
         {
             try
             {
-                foreach (var hardware in computer.Hardware) Update(hardware);
+                bool boardDue=DateTimeOffset.UtcNow>=nextBoard;
+                if(boardDue)nextBoard=DateTimeOffset.UtcNow.AddSeconds(1);
+                foreach (var hardware in computer.Hardware) {
+                    if(hardware.HardwareType==HardwareType.Motherboard && !boardDue)continue;
+                    if(hardware.HardwareType==HardwareType.Memory && hardware.Identifier.ToString()!="/ram")continue;
+                    Update(hardware);
+                }
                 var cpu = computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
                 var gpu = computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia)
                     ?? computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuAmd)
@@ -93,7 +101,7 @@ sealed class Telemetry : BackgroundService
                 // Do not retain stale sensor values after a failed sample.
                 Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, null, null, null, ex.Message));
             }
-            try { await Task.Delay(1000, stop); } catch (OperationCanceledException) { break; }
+            try { if(!await sensorTimer.WaitForNextTickAsync(stop))break; } catch (OperationCanceledException) { break; }
         }
         // LHM 0.9.6 SuperIOHardware.Close restores control modes even for a read-only
         // monitor. Do not invoke that path alongside Fan Control. This worker lives
