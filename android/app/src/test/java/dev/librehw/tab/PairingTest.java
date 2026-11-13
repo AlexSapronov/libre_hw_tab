@@ -19,6 +19,7 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 35)
 public class PairingTest {
+    public static class OfflineActivity extends MainActivity { @Override protected boolean weatherEnabled(){return false;} }
     private static final String TOKEN = "0123456789abcdef0123456789abcdef";
     private static String envelope(String... addresses) throws Exception {
         return new JSONObject().put("app","libre-hw-tab").put("version",1).put("token",TOKEN)
@@ -44,7 +45,7 @@ public class PairingTest {
         }
     }
     @Test public void scanButtonStartsBundledCameraScanner() {
-        try (org.robolectric.android.controller.ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+        try (org.robolectric.android.controller.ActivityController<OfflineActivity> controller=Robolectric.buildActivity(OfflineActivity.class).setup()) {
             MainActivity activity=controller.get();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();

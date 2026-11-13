@@ -28,6 +28,11 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private boolean active;
     private android.content.SharedPreferences preferences;
     private HttpURLConnection connection;
+    private ScheduledExecutorService extras;
+    private long lastWake;
+    private int editorPreviousMode;
+    private String editorPreviousLayout;
+    private final Runnable alarmTick=new Runnable(){public void run(){if(active){updateAlarm();ui.postDelayed(this,30000);}}};
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -42,12 +47,21 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             dashboard.mode=(dashboard.mode+1)%3;
             preferences.edit().putInt("mode",dashboard.mode).apply(); dashboard.invalidate();
         };
+        dashboard.layout=DashboardLayout.parse(preferences.getString("layout_v1","{}"));
+        dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
+        dashboard.animations=preferences.getBoolean("animations",true);
+        try{dashboard.weather=new JSONObject(preferences.getString("weather_cache",""));}catch(Exception ignored){}
+        dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherCity;dashboard.onWake=this::wake;
+        dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);
     }
-    @Override protected void onResume() { super.onResume(); active = true; restart(); }
-    @Override protected void onPause() { active = false; stop(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume(); active=true;restart();ui.post(alarmTick);
+        extras=Executors.newSingleThreadScheduledExecutor();if(weatherEnabled())extras.scheduleWithFixedDelay(this::refreshWeather,0,15,TimeUnit.MINUTES);
+    }
+    @Override protected void onPause() { active=false;stop();ui.removeCallbacks(alarmTick);if(extras!=null)extras.shutdownNow();super.onPause(); }
     @Override public void onWindowFocusChanged(boolean focus) { super.onWindowFocusChanged(focus); if (focus) immersive(); }
     private void immersive() {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
@@ -75,10 +89,10 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             private long lastStart=-1000;
             public void run() {
                 long now=android.os.SystemClock.elapsedRealtime();
-                if(now-lastStart<180)return; // Skip overdue slots after a slow request; never burst.
+                if(now-lastStart<450)return; // Skip overdue slots after a slow request; never burst.
                 lastStart=now; poll(current);
             }
-        }, 0, 200, TimeUnit.MILLISECONDS);
+        }, 0, 500, TimeUnit.MILLISECONDS);
     }
     private void poll(int current) {
         JSONObject sample = null;
@@ -99,7 +113,13 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         }
         final JSONObject result = sample;
         final String error = message;
-        ui.post(() -> { if (current == generation && active) dashboard.accept(result, error, demonstration); });
+        ui.post(() -> { if(current==generation && active) {
+            if(result!=null && result.optJSONArray("wakeTargets")!=null) {
+                String targets=result.optJSONArray("wakeTargets").toString();
+                if(!targets.equals(preferences.getString("wake_targets","")))preferences.edit().putString("wake_targets",targets).apply();
+            }
+            dashboard.accept(result,error,demonstration);
+        }});
     }
     private EditText field(LinearLayout layout, String hint, String value, boolean secret) {
         EditText edit = new EditText(this); edit.setSingleLine(true); edit.setHint(hint); edit.setText(value);
@@ -167,6 +187,108 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 Toast.makeText(this,"Подключено к компьютеру",Toast.LENGTH_SHORT).show();
             });
         });
+    }
+    private void menu() {
+        new AlertDialog.Builder(this).setTitle("Libre HW Tab")
+            .setItems(new String[]{"Экран ожидания","Редактор блоков","Погода: выбрать город","Будильник","Wake-on-LAN","Автоожидание: "+(dashboard.autoStandby?"вкл":"выкл"),"Анимации: "+(dashboard.animations?"вкл":"выкл"),"Подключение"},(d,index)->{
+                if(index==0){dashboard.forceStandby=true;dashboard.invalidate();}
+                else if(index==1)new AlertDialog.Builder(this).setTitle("Какой макет изменить?").setItems(new String[]{"Обзор","Игра"},(v,choice)->beginEditor(choice==1)).show();
+                else if(index==2)weatherCity();else if(index==3)alarm();else if(index==4)wakeOptions();
+                else if(index==5){dashboard.autoStandby=!dashboard.autoStandby;preferences.edit().putBoolean("auto_standby",dashboard.autoStandby).apply();dashboard.invalidate();}
+                else if(index==6){dashboard.animations=!dashboard.animations;preferences.edit().putBoolean("animations",dashboard.animations).apply();}
+                else settings();
+            }).setNegativeButton("Закрыть",null).show();
+    }
+    private void beginEditor(boolean game) {
+        editorPreviousMode=dashboard.mode;editorPreviousLayout=dashboard.layout.json();
+        dashboard.forceStandby=false;dashboard.mode=game?2:1;dashboard.editing=true;dashboard.invalidate();
+    }
+    private void saveEditor() {
+        if(!dashboard.layout.valid(dashboard.playing())){Toast.makeText(this,"Блоки пересекаются или все скрыты. Раздвинь их перед сохранением.",Toast.LENGTH_LONG).show();return;}
+        preferences.edit().putString("layout_v1",dashboard.layout.json()).apply();dashboard.editing=false;dashboard.mode=editorPreviousMode;dashboard.suppressStandby();
+    }
+    private void cancelEditor(){dashboard.layout=DashboardLayout.parse(editorPreviousLayout);dashboard.editing=false;dashboard.mode=editorPreviousMode;dashboard.suppressStandby();}
+    private void editorOptions() {
+        new AlertDialog.Builder(this).setTitle("Редактор")
+            .setItems(new String[]{"Показать / скрыть блоки","Выбрать показатели","Сбросить оба макета"},(d,index)->{
+                if(index==0){
+                    boolean game=dashboard.playing();String[] keys=DashboardLayout.keys(game);boolean[] checked=new boolean[keys.length];
+                    for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.visible(keys[i],game);
+                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":"Правая панель";
+                    new AlertDialog.Builder(this).setTitle("Видимые блоки").setMultiChoiceItems(labels,checked,(v,item,on)->{
+                        String key=DashboardLayout.id(keys[item],game);if(on)dashboard.layout.hidden.remove(key);else dashboard.layout.hidden.add(key);dashboard.invalidate();
+                    }).setPositiveButton("Готово",null).show();
+                }else if(index==1){
+                    String[] keys={"temperature","load","clock","power","fps","low1","low01","frameTime","memory","history","fan","sideFan","pump","gpuFan"};
+                    String[] labels={"Температура","Загрузка","Частота","Мощность","FPS","1% low","0,1% low","Время кадра","Память","График","Верх / AIO","Боковые вентиляторы","Помпа","Вентилятор GPU"};
+                    boolean[] checked=new boolean[keys.length];for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.metric(keys[i]);
+                    new AlertDialog.Builder(this).setTitle("Показатели").setMultiChoiceItems(labels,checked,(v,item,on)->{
+                        if(on)dashboard.layout.disabledMetrics.remove(keys[item]);else dashboard.layout.disabledMetrics.add(keys[item]);dashboard.invalidate();
+                    }).setPositiveButton("Готово",null).show();
+                }else{dashboard.layout=new DashboardLayout();dashboard.invalidate();}
+            }).show();
+    }
+    private void updateAlarm() {
+        android.app.AlarmManager manager=(android.app.AlarmManager)getSystemService(ALARM_SERVICE);
+        android.app.AlarmManager.AlarmClockInfo next=manager.getNextAlarmClock();
+        dashboard.nextAlarm=next==null?"Будильник не задан":java.time.Instant.ofEpochMilli(next.getTriggerTime()).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, HH:mm",new java.util.Locale("ru")));
+        dashboard.invalidate();
+    }
+    private void alarm() {
+        java.time.LocalTime now=java.time.LocalTime.now();
+        new android.app.TimePickerDialog(this,(picker,hour,minute)->{
+            Intent intent=new Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
+                .putExtra(android.provider.AlarmClock.EXTRA_HOUR,hour).putExtra(android.provider.AlarmClock.EXTRA_MINUTES,minute)
+                .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE,"Libre HW Tab").putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI,false);
+            try{startActivity(intent);}catch(ActivityNotFoundException ex){Toast.makeText(this,"На планшете не найдено приложение Часы",Toast.LENGTH_LONG).show();}
+        },now.getHour(),now.getMinute(),true).show();
+    }
+    protected boolean weatherEnabled(){return true;}
+    private void refreshWeather() {
+        String city=preferences.getString("weather_city","Санкт-Петербург");
+        try {
+            JSONObject cached=dashboard.weather;
+            if(cached!=null && city.equals(cached.optString("city")) && System.currentTimeMillis()-cached.optLong("fetched")<900000)return;
+            double lat=Double.parseDouble(preferences.getString("weather_lat","59.9386")),lon=Double.parseDouble(preferences.getString("weather_lon","30.3141"));
+            JSONObject data=WeatherClient.fetch(city,lat,lon);
+            if(!city.equals(preferences.getString("weather_city","Санкт-Петербург")))return;
+            preferences.edit().putString("weather_cache",data.toString()).apply();
+            ui.post(()->{if(!isDestroyed()){dashboard.weather=data;dashboard.invalidate();}});
+        }catch(Exception ignored){ui.post(()->{if(!isDestroyed()){dashboard.weatherStatus="Погода недоступна";dashboard.invalidate();}});}
+    }
+    private void weatherCity() {
+        EditText city=new EditText(this);city.setSingleLine();city.setText(preferences.getString("weather_city","Санкт-Петербург"));
+        new AlertDialog.Builder(this).setTitle("Город для погоды").setView(city).setPositiveButton("Найти",(dialog,w)->{
+            String query=city.getText().toString().trim();if(query.length()<2)return;
+            Toast.makeText(this,"Поиск города…",Toast.LENGTH_SHORT).show();
+            pairingWorker.submit(()->{
+                try {
+                    JSONArray cities=WeatherClient.cities(query);String[] names=new String[cities.length()];
+                    for(int i=0;i<names.length;i++){JSONObject item=cities.getJSONObject(i);names[i]=item.getString("name")+", "+item.optString("admin1")+", "+item.optString("country");}
+                    ui.post(()->{if(!active)return;if(names.length==0){Toast.makeText(this,"Город не найден",Toast.LENGTH_LONG).show();return;}
+                        new AlertDialog.Builder(this).setTitle("Выбери город").setItems(names,(v,index)->{
+                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";extras.submit(this::refreshWeather);}catch(Exception ignored){}
+                        }).show();
+                    });
+                }catch(Exception ex){ui.post(()->Toast.makeText(this,"Поиск недоступен. Проверь интернет планшета.",Toast.LENGTH_LONG).show());}
+            });
+        }).setNeutralButton("Open-Meteo",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://open-meteo.com/")));}catch(ActivityNotFoundException ignored){}}).setNegativeButton("Отмена",null).show();
+    }
+    private void wake() {
+        long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;
+        pairingWorker.submit(()->{
+            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->Toast.makeText(this,"Команда отправлена. Жду подключения к ПК…",Toast.LENGTH_LONG).show());}
+            catch(Exception ex){ui.post(()->Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show());}
+        });
+    }
+    private void wakeOptions() {
+        new AlertDialog.Builder(this).setTitle("Wake-on-LAN")
+            .setMessage("Пробуждение требует включённого Wake-on-LAN в BIOS и настройках сетевой карты. Из полного выключения поддержка зависит от платы. ПК должен быть подключён к питанию; надёжнее Ethernet. Команда отправляется только по домашней сети.")
+            .setPositiveButton("Отправить команду",(d,w)->wake()).setNeutralButton("Указать MAC",(d,w)->{
+                EditText mac=new EditText(this);mac.setSingleLine();mac.setHint("AA:BB:CC:DD:EE:FF");
+                AlertDialog input=new AlertDialog.Builder(this).setTitle("MAC сетевой карты ПК").setView(mac).setPositiveButton("Сохранить",null).setNegativeButton("Отмена",null).create();
+                input.setOnShowListener(v->input.getButton(-1).setOnClickListener(b->{try{WakeClient.packet(mac.getText().toString());JSONArray targets=new JSONArray().put(new JSONObject().put("mac",mac.getText().toString()).put("broadcast","255.255.255.255"));preferences.edit().putString("wake_targets",targets.toString()).apply();input.dismiss();}catch(Exception ex){mac.setError(ex.getMessage());}}));input.show();
+            }).setNegativeButton("Закрыть",null).show();
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {

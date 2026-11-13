@@ -47,7 +47,7 @@ app.Use(async (context, next) =>
     await next(context);
 });
 app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming) => telemetry.Snapshot is { } snapshot
-    ? Results.Json(snapshot with { Game = gaming.Current }) : Results.StatusCode(503));
+    ? Results.Json(snapshot with { Game = gaming.Current, WakeTargets = NetworkWake.Targets.Value }) : Results.StatusCode(503));
 Console.WriteLine("LIBRE HW TAB — Windows companion");
 Console.WriteLine("Enter an address and the pairing key in the tablet app:");
 foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
@@ -59,7 +59,7 @@ await app.RunAsync();
 
 record Connection(int Port, string Token);
 record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total, float? Pump = null, float? SideFan = null, string? FanName = null, string? PumpName = null, bool CoolingProfile = false, float? UsableTotal = null);
-record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null);
+record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null, WakeTarget[]? WakeTargets = null);
 sealed class Telemetry : BackgroundService
 {
     private Snapshot? snapshot;
@@ -71,7 +71,7 @@ sealed class Telemetry : BackgroundService
         try { computer.Open(); }
         catch (Exception ex) { Volatile.Write(ref snapshot, new(1, DateTimeOffset.UtcNow, Environment.MachineName, null, null, null, ex.Message)); return; }
         DateTimeOffset nextBoard=DateTimeOffset.MinValue;
-        using var sensorTimer=new PeriodicTimer(TimeSpan.FromMilliseconds(200));
+        using var sensorTimer=new PeriodicTimer(TimeSpan.FromMilliseconds(500));
         while (!stop.IsCancellationRequested)
         {
             try
