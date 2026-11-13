@@ -85,8 +85,11 @@ public class StandbyLayoutTest {
     @Test public void TomorrowForecastRendersInStandbyWithBothProvidersAndMissingValues() throws Exception {
         DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;view.forceStandby=true;
         view.weather=WeatherClient.fetch("Санкт-Петербург",60,30,url->WeatherClientTest.primaryForecast());
+        view.weather.put("forecastZone","Europe/Moscow");
+        java.time.LocalDate cityToday=java.time.LocalDate.now(java.time.ZoneId.of("Europe/Moscow"));
+        for(int i=0;i<view.weather.getJSONArray("forecast").length();i++)view.weather.getJSONArray("forecast").getJSONObject(i).put("date",cityToday.plusDays(i/3).toString());
         view.nextAlarm="пн, 07:30";view.themeId=6;render(view,"standby-forecast-nerv");view.themeId=0;render(view,"standby-forecast-jade");
-        view.weather.put("source","wttr.in");for(int i=0;i<3;i++)view.weather.getJSONArray("forecast").getJSONObject(i).put("precipitationHours",3);
+        view.weather.put("source","wttr.in");for(int i=0;i<view.weather.getJSONArray("forecast").length();i++)view.weather.getJSONArray("forecast").getJSONObject(i).put("precipitationHours",3);
         view.themeId=6;render(view,"standby-forecast-wttr");
         view.weather.remove("forecast");render(view,"standby-forecast-missing");
     }

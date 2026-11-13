@@ -6,7 +6,7 @@ import org.json.*;
 final class WeatherClient {
     static JSONObject request(String url) throws Exception {
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setRequestProperty("User-Agent","LibreHwTab/1.6.2");c.setRequestProperty("Accept","application/json");
+        c.setRequestProperty("User-Agent","LibreHwTab/1.6.3");c.setRequestProperty("Accept","application/json");
         c.setConnectTimeout(5000);c.setReadTimeout(5000);c.setInstanceFollowRedirects(false);
         try {
             int status=c.getResponseCode();if(status!=200)throw new IOException("HTTP "+status);
@@ -22,9 +22,15 @@ final class WeatherClient {
     }
     interface Transport { JSONObject get(String url) throws Exception; }
     static JSONObject fetch(String city,double latitude,double longitude) throws Exception {
-        return fetch(city,latitude,longitude,WeatherClient::request);
+        return fetch(city,latitude,longitude,WeatherClient::request,java.time.ZoneId.systemDefault().getId());
+    }
+    static JSONObject fetch(String city,double latitude,double longitude,String zone) throws Exception {
+        return fetch(city,latitude,longitude,WeatherClient::request,zone);
     }
     static JSONObject fetch(String city,double latitude,double longitude,Transport transport) throws Exception {
+        return fetch(city,latitude,longitude,transport,java.time.ZoneId.systemDefault().getId());
+    }
+    static JSONObject fetch(String city,double latitude,double longitude,Transport transport,String zone) throws Exception {
         Exception primary;
         try {
             JSONObject data=transport.get("https://api.open-meteo.com/v1/forecast?latitude="+latitude+"&longitude="+longitude+"&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code,precipitation_probability,precipitation&forecast_days=2&timezone=auto");
@@ -42,51 +48,73 @@ final class WeatherClient {
             JSONArray descriptions=current.optJSONArray("lang_ru");
             if(descriptions==null||descriptions.length()==0)descriptions=current.optJSONArray("weatherDesc");
             String summary=descriptions==null||descriptions.length()==0?"Текущая погода":descriptions.getJSONObject(0).optString("value","Текущая погода");
-            JSONObject result=result(city,current.getDouble("temp_C"),summary,"wttr.in");
+            JSONObject result=result(city,current.getDouble("temp_C"),summary,"wttr.in").put("forecastZone",zone);
             try{wttrForecast(result,data);}catch(Exception ignored){}
             return result;
         }catch(Exception fallback){throw new IOException("Open-Meteo: "+reason(primary)+"\nwttr.in: "+reason(fallback));}
     }
-    // Slot temperatures/conditions are at 09:00, 15:00 and 21:00 in the city's time zone.
+    // Keep today and following days in the cache; choose the next three slots at render time.
     static void openMeteoForecast(JSONObject result,JSONObject data) throws Exception {
-        String tomorrow=java.time.LocalDate.parse(data.getJSONObject("current").getString("time").substring(0,10)).plusDays(1).toString();
         JSONObject hourly=data.getJSONObject("hourly");JSONArray times=hourly.getJSONArray("time"),slots=new JSONArray();
-        for(int hour:new int[]{9,15,21}) {
-            String target=tomorrow+String.format(java.util.Locale.US,"T%02d:00",hour);
-            for(int i=0;i<times.length();i++)if(target.equals(times.getString(i))) {
-                double temperature=hourly.getJSONArray("temperature_2m").getDouble(i);
-                if(!Double.isFinite(temperature)||temperature< -100||temperature>70)break;
-                JSONObject slot=new JSONObject().put("hour",hour).put("temperature",temperature)
-                    .put("summary",description(hourly.getJSONArray("weather_code").getInt(i)));
-                optionalNumber(slot,"probability",hourly.optJSONArray("precipitation_probability"),i,100);
-                optionalNumber(slot,"precipitation",hourly.optJSONArray("precipitation"),i,1000);
-                slot.put("precipitationHours",1);slots.put(slot);break;
-            }
+        for(int i=0;i<times.length();i++) {
+            java.time.LocalDateTime time=java.time.LocalDateTime.parse(times.getString(i));int hour=time.getHour();
+            if(time.getMinute()!=0 || (hour!=9 && hour!=15 && hour!=21))continue;
+            double temperature=hourly.getJSONArray("temperature_2m").getDouble(i);
+            if(!Double.isFinite(temperature)||temperature< -100||temperature>70)continue;
+            JSONObject slot=new JSONObject().put("date",time.toLocalDate().toString()).put("hour",hour).put("temperature",temperature)
+                .put("summary",description(hourly.getJSONArray("weather_code").getInt(i)));
+            optionalNumber(slot,"probability",hourly.optJSONArray("precipitation_probability"),i,100);
+            optionalNumber(slot,"precipitation",hourly.optJSONArray("precipitation"),i,1000);
+            slot.put("precipitationHours",1);slots.put(slot);
         }
-        result.put("forecast",slots).put("forecastDate",tomorrow).put("forecastZone",data.optString("timezone",""));
+        result.put("forecast",slots).put("forecastZone",data.getString("timezone"));
     }
     static void wttrForecast(JSONObject result,JSONObject data) throws Exception {
-        JSONArray days=data.getJSONArray("weather");
-        String today=data.optJSONArray("current_condition").getJSONObject(0).optString("localObsDateTime","");
-        if(today.length()<10)today=days.getJSONObject(0).getString("date");else today=today.substring(0,10);
-        String tomorrow=java.time.LocalDate.parse(today).plusDays(1).toString();JSONArray slots=new JSONArray();
+        JSONArray days=data.getJSONArray("weather"),slots=new JSONArray();
         for(int d=0;d<days.length();d++) {
-            JSONObject day=days.getJSONObject(d);if(!tomorrow.equals(day.getString("date")))continue;
-            JSONArray hourly=day.getJSONArray("hourly");
-            for(int hour:new int[]{9,15,21})for(int i=0;i<hourly.length();i++) {
-                JSONObject item=hourly.getJSONObject(i);if(item.optInt("time",-1)!=hour*100)continue;
-                double temperature=item.getDouble("tempC");if(!Double.isFinite(temperature)||temperature< -100||temperature>70)break;
+            JSONObject day=days.getJSONObject(d);String date=java.time.LocalDate.parse(day.getString("date")).toString();
+            JSONArray hourly=day.optJSONArray("hourly");if(hourly==null)continue;
+            for(int i=0;i<hourly.length();i++) {
+                JSONObject item=hourly.getJSONObject(i);int time=item.optInt("time",-1);
+                if(time!=900 && time!=1500 && time!=2100)continue;
+                double temperature=item.getDouble("tempC");if(!Double.isFinite(temperature)||temperature< -100||temperature>70)continue;
                 JSONArray descriptions=item.optJSONArray("lang_ru");if(descriptions==null||descriptions.length()==0)descriptions=item.optJSONArray("weatherDesc");
-                JSONObject slot=new JSONObject().put("hour",hour).put("temperature",temperature)
+                JSONObject slot=new JSONObject().put("date",date).put("hour",time/100).put("temperature",temperature)
                     .put("summary",descriptions==null||descriptions.length()==0?"Нет данных":descriptions.getJSONObject(0).optString("value","Нет данных"));
                 double rain=item.optDouble("chanceofrain",Double.NaN),snow=item.optDouble("chanceofsnow",Double.NaN);
                 double chance=Double.isFinite(rain)&&Double.isFinite(snow)?Math.max(rain,snow):Double.isFinite(rain)?rain:snow;
                 if(Double.isFinite(chance)&&chance>=0&&chance<=100)slot.put("probability",chance);
                 double mm=item.optDouble("precipMM",Double.NaN);if(Double.isFinite(mm)&&mm>=0&&mm<=1000)slot.put("precipitation",mm);
-                slot.put("precipitationHours",3);slots.put(slot);break;
+                slot.put("precipitationHours",3);slots.put(slot);
             }
         }
-        result.put("forecast",slots).put("forecastDate",tomorrow);
+        result.put("forecast",slots);
+    }
+    static java.time.ZoneId forecastZone(JSONObject weather) {
+        try{return java.time.ZoneId.of(weather.getString("forecastZone"));}catch(Exception ignored){return java.time.ZoneId.systemDefault();}
+    }
+    static JSONArray upcoming(JSONObject weather,java.time.Instant instant) {
+        java.time.ZonedDateTime now=instant.atZone(forecastZone(weather));JSONArray selected=new JSONArray();
+        JSONArray available=weather==null?null:weather.optJSONArray("forecast");
+        try {
+            for(int day=0;day<2 && selected.length()<3;day++)for(int hour:new int[]{9,15,21}) {
+                java.time.LocalDate date=now.toLocalDate().plusDays(day);
+                if(date.atTime(hour,0).atZone(now.getZone()).toInstant().isBefore(instant))continue;
+                if(selected.length()==3)break;
+                JSONObject slot=null;
+                if(available!=null)for(int i=0;i<available.length();i++) {
+                    JSONObject candidate=available.optJSONObject(i);
+                    if(candidate!=null && date.toString().equals(candidate.optString("date")) && candidate.optInt("hour")==hour){slot=candidate;break;}
+                }
+                selected.put(slot==null?new JSONObject().put("date",date.toString()).put("hour",hour):slot);
+            }
+        }catch(JSONException ignored){}
+        return selected;
+    }
+    static String dayLabel(String date,java.time.LocalDate today) {
+        if(today.toString().equals(date))return "СЕГОДНЯ";
+        if(today.plusDays(1).toString().equals(date))return "ЗАВТРА";
+        try{return java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"));}catch(Exception ignored){return "";}
     }
     private static void optionalNumber(JSONObject slot,String key,JSONArray values,int index,double maximum) throws Exception {
         double value=values==null?Double.NaN:values.optDouble(index,Double.NaN);
@@ -94,7 +122,7 @@ final class WeatherClient {
     }
     private static JSONObject result(String city,double temperature,String summary,String source) throws Exception {
         if(!Double.isFinite(temperature)||temperature< -100||temperature>70)throw new IOException("Некорректная температура");
-        return new JSONObject().put("city",city).put("temperature",temperature).put("summary",summary.substring(0,Math.min(100,summary.length()))).put("source",source).put("forecastVersion",1).put("fetched",System.currentTimeMillis());
+        return new JSONObject().put("city",city).put("temperature",temperature).put("summary",summary.substring(0,Math.min(100,summary.length()))).put("source",source).put("forecastVersion",2).put("fetched",System.currentTimeMillis());
     }
     static String reason(Exception ex) {
         if(ex instanceof UnknownHostException)return "не удалось найти сервер (DNS)";

@@ -255,12 +255,12 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         try {
             JSONObject cached=dashboard.weather;
             long age=cached==null?Long.MAX_VALUE:System.currentTimeMillis()-cached.optLong("fetched");
-            if(!forced && cached!=null && cached.optInt("forecastVersion")==1 && city.equals(cached.optString("city")) && age>=0 && age<900000)return;
+            if(!forced && cached!=null && cached.optInt("forecastVersion")==2 && city.equals(cached.optString("city")) && age>=0 && age<900000)return;
             double lat=Double.parseDouble(preferences.getString("weather_lat","59.9386")),lon=Double.parseDouble(preferences.getString("weather_lon","30.3141"));
-            JSONObject data=WeatherClient.fetch(city,lat,lon);
+            JSONObject data=WeatherClient.fetch(city,lat,lon,preferences.getString("weather_zone",cached!=null?WeatherClient.forecastZone(cached).getId():city.equals("Санкт-Петербург")?"Europe/Moscow":java.time.ZoneId.systemDefault().getId()));
             if(!city.equals(preferences.getString("weather_city","Санкт-Петербург")))return;
             nextWeatherAttempt=0;
-            preferences.edit().putString("weather_cache",data.toString()).apply();
+            preferences.edit().putString("weather_cache",data.toString()).putString("weather_zone",data.optString("forecastZone",preferences.getString("weather_zone","Europe/Moscow"))).apply();
             ui.post(()->{if(!isDestroyed()){dashboard.weather=data;weatherError="";dashboard.weatherHint="Нажми, чтобы обновить";dashboard.invalidate();}});
         }catch(Exception ex){
             nextWeatherAttempt=android.os.SystemClock.elapsedRealtime()+30000;
@@ -291,7 +291,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                     for(int i=0;i<names.length;i++){JSONObject item=cities.getJSONObject(i);names[i]=item.getString("name")+", "+item.optString("admin1")+", "+item.optString("country");}
                     ui.post(()->{if(!active)return;if(names.length==0){Toast.makeText(this,"Город не найден",Toast.LENGTH_LONG).show();return;}
                         new AlertDialog.Builder(this).setTitle("Выбери город").setItems(names,(v,index)->{
-                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";requestWeather();}catch(Exception ignored){}
+                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).putString("weather_zone",selected.optString("timezone",java.time.ZoneId.systemDefault().getId())).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";requestWeather();}catch(Exception ignored){}
                         }).show();
                     });
                 }catch(Exception ex){ui.post(()->Toast.makeText(this,"Поиск недоступен. Проверь интернет планшета.",Toast.LENGTH_LONG).show());}

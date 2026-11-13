@@ -359,23 +359,18 @@ public final class DashboardView extends View {
         fit(c,sample==null?"ПК недоступен · "+error:"Соединение с ПК активно",60,738,12,1080,muted);
     }
     private void drawForecast(Canvas c) {
-        String date=weather==null?"":weather.optString("forecastDate","");
-        String heading="ЗАВТРА";
-        if(!date.isEmpty())try {
-            java.time.LocalDate target=java.time.LocalDate.parse(date);
-            java.time.ZoneId zone=java.time.ZoneId.systemDefault();
-            try{zone=java.time.ZoneId.of(weather.optString("forecastZone",""));}catch(Exception ignored){}
-            heading=(target.equals(java.time.LocalDate.now(zone).plusDays(1))?"ЗАВТРА":"ПРОГНОЗ")+" · "+target.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"));
-        }catch(Exception ignored){}
-        text(c,heading,730,356,13,accent,medium);
-        JSONArray slots=weather==null?null:weather.optJSONArray("forecast");
-        String[] labels={"УТРО","ДЕНЬ","ВЕЧЕР"};int[] hours={9,15,21};
+        java.time.Instant instant=java.time.Instant.now();
+        java.time.LocalDate today=instant.atZone(WeatherClient.forecastZone(weather)).toLocalDate();
+        text(c,"БЛИЖАЙШИЙ ПРОГНОЗ",730,356,13,accent,medium);
+        JSONArray slots=WeatherClient.upcoming(weather,instant);
         for(int n=0;n<3;n++) {
+            JSONObject slot=slots.optJSONObject(n);int hour=slot==null?9:slot.optInt("hour",9);
+            String label=hour==9?"УТРО":hour==15?"ДЕНЬ":"ВЕЧЕР";
             float x=730+n*141;box(c,x,370,130,154,panel);
-            text(c,labels[n]+" · "+hours[n]+":00",x+9,391,10,accent,medium);
-            JSONObject slot=null;if(slots!=null)for(int i=0;i<slots.length();i++){JSONObject candidate=slots.optJSONObject(i);if(candidate!=null&&candidate.optInt("hour")==hours[n]){slot=candidate;break;}}
-            if(slot==null){text(c,"—",x+10,432,28,white,digits);text(c,"Нет прогноза",x+9,460,11,muted,regular);continue;}
-            text(c,number(value(slot,"temperature"))+"°",x+10,432,30,white,digits);
+            text(c,label+" · "+hour+":00",x+9,389,10,accent,medium);
+            text(c,slot==null?"":WeatherClient.dayLabel(slot.optString("date"),today),x+9,407,9,muted,regular);
+            if(slot==null || !slot.has("temperature")){text(c,"—",x+10,441,26,white,digits);text(c,"Нет прогноза",x+9,460,11,muted,regular);continue;}
+            text(c,number(value(slot,"temperature"))+"°",x+10,441,27,white,digits);
             String summary=slot.optString("summary","Нет данных");
             if(summary.length()>19)summary=summary.substring(0,18)+"…";
             fit(c,summary,x+9,457,12,112,muted);
