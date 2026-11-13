@@ -15,3 +15,5 @@ QR generation: QRCoder 1.6.0, MIT license, https://github.com/Shane32/QRCoder .
 Android QR scanner: ZXing Android Embedded 4.3.0 (JourneyApps), Apache-2.0, https://github.com/journeyapps/zxing-android-embedded/tree/v4.3.0 .
 ZXing core: Apache-2.0, https://github.com/zxing/zxing .
 AndroidX Activity and transitive AndroidX dependencies: Apache-2.0, https://android.googlesource.com/platform/frameworks/support/ .
+
+PresentMon standalone 2.6.0 x64 (unmodified official binary), MIT license, https://github.com/GameTechDev/PresentMon/tree/v2.6.0 . Full license accompanies the binary as PresentMon-LICENSE.txt; binary SHA-256 b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af.

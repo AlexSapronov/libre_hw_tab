@@ -31,6 +31,8 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{config.Port}");
 builder.Logging.ClearProviders();
 builder.Services.AddSingleton<Telemetry>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Telemetry>());
+builder.Services.AddSingleton<GamingService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GamingService>());
 var app = builder.Build();
 app.Use(async (context, next) =>
 {
@@ -44,8 +46,8 @@ app.Use(async (context, next) =>
     }
     await next(context);
 });
-app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry) => telemetry.Snapshot is { } snapshot
-    ? Results.Json(snapshot) : Results.StatusCode(503));
+app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming) => telemetry.Snapshot is { } snapshot
+    ? Results.Json(snapshot with { Game = gaming.Current }) : Results.StatusCode(503));
 Console.WriteLine("LIBRE HW TAB — Windows companion");
 Console.WriteLine("Enter an address and the pairing key in the tablet app:");
 foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
@@ -57,7 +59,7 @@ await app.RunAsync();
 
 record Connection(int Port, string Token);
 record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total, float? Pump = null, float? SideFan = null, string? FanName = null, string? PumpName = null, bool CoolingProfile = false, float? UsableTotal = null);
-record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null);
+record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null);
 sealed class Telemetry : BackgroundService
 {
     private Snapshot? snapshot;

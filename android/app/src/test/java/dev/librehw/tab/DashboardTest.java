@@ -36,6 +36,14 @@ public class DashboardTest {
         }
         data.getJSONObject("cpu").put("temperature",100).put("load",100);
         view.accept(data,"",true); render(view,"hot");
+        data.getJSONObject("cpu").put("temperature",58).put("load",42);
+        data.getJSONObject("gpu").put("temperature",65).put("load",94);
+        data.getJSONObject("game").put("active",true);
+        view.accept(data,"",true); render(view,"game-eva");
+        view.eva=false; render(view,"game-jade");
+        data.getJSONObject("game").put("paused",true).put("fps",org.json.JSONObject.NULL).put("frames",new org.json.JSONArray());
+        view.accept(data,"",true);render(view,"game-paused");
+        view.mode=1;render(view,"game-overview-override");view.mode=0;
         view.accept(null,"ПК выключен",false); render(view,"offline");
         data.put("cpu",JSONObject.NULL).put("gpu",JSONObject.NULL).put("memory",JSONObject.NULL);
         view.accept(data,"",false); render(view,"missing");
@@ -48,8 +56,8 @@ public class DashboardTest {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);
         view.draw(new Canvas(bitmap));
         float scale=800f/760f, dx=(1340-1200*scale)/2;
-        for (float cardX : new float[] {36,610}) {
-            float center=dx+(cardX+424)*scale;
+        for (float cardX : new float[] {36,490}) {
+            float center=dx+(cardX+342)*scale;
             int min=1340,max=0;
             for (int y=(int)((125+148)*scale);y<(125+205)*scale;y++) {
                 for (int x=(int)(center-65*scale);x<center+65*scale;x++) {

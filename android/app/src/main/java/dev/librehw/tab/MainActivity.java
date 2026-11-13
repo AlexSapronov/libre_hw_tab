@@ -37,6 +37,11 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         token = preferences.getString("token", "");
         dashboard = new DashboardView(this, this::settings, this::toggleTheme);
         dashboard.eva = preferences.getBoolean("eva", false);
+        dashboard.mode = Math.max(0, Math.min(2, preferences.getInt("mode", 0)));
+        dashboard.onModeChange = () -> {
+            dashboard.mode=(dashboard.mode+1)%3;
+            preferences.edit().putInt("mode",dashboard.mode).apply(); dashboard.invalidate();
+        };
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);

@@ -40,10 +40,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Test physical RAM and cooling sensor selection
+      - name: Test RAM, cooling, frame statistics and automatic mode
         run: dotnet test tests/AgentTests/LibreHwAgent.Tests.csproj -c Release
       - name: Publish self-contained companion
         run: dotnet publish agent/LibreHwAgent.csproj -c Release -o package/agent
+      - name: Bundle pinned PresentMon standalone collector
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe' -OutFile package/agent/PresentMon.exe
+          if ((Get-FileHash package/agent/PresentMon.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af') { throw 'PresentMon checksum mismatch' }
+          Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile package/agent/PresentMon-LICENSE.txt
       - name: Validate installer syntax and smoke-test authenticated API
         shell: pwsh
         run: ./tests/Smoke-Agent.ps1
