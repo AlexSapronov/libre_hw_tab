@@ -277,7 +277,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private void wake() {
         long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;
         pairingWorker.submit(()->{
-            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->Toast.makeText(this,"Команда отправлена. Жду подключения к ПК…",Toast.LENGTH_LONG).show());}
+            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->{dashboard.forceStandby=false;dashboard.invalidate();Toast.makeText(this,"Команда отправлена. Жду подключения к ПК…",Toast.LENGTH_LONG).show();});}
             catch(Exception ex){ui.post(()->Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show());}
         });
     }

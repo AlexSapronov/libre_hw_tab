@@ -41,6 +41,21 @@ public class StandbyLayoutTest {
         view.layout.positions.put("game.history",new RectF(36,443,926,690));render(view,"editor-custom");
         assertTrue(view.layout.valid(true));
     }
+    @Test public void EditorTouchMovesResizesAndInvokesSave() throws Exception {
+        DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;view.mode=1;view.editing=true;
+        for(String key:new String[]{"gpu","memory","history","side"})view.layout.hidden.add("overview."+key);
+        view.accept(DemoData.sample(),"",true);render(view,"editor-single");
+        touch(view,0,100,200);touch(view,2,200,250);touch(view,1,200,250);
+        assertEquals(136,view.layout.rect("cpu",false).left,.01);assertEquals(175,view.layout.rect("cpu",false).top,.01);
+        render(view,"editor-moved");
+        touch(view,0,564,517);touch(view,2,624,557);touch(view,1,624,557);
+        assertEquals(496,view.layout.rect("cpu",false).width(),.01);assertEquals(390,view.layout.rect("cpu",false).height(),.01);
+        int[] saved={0};view.onEditorSave=()->saved[0]++;touch(view,1,900,45);assertEquals(1,saved[0]);assertTrue(view.layout.valid(false));
+    }
+    private void touch(DashboardView view,int action,float x,float y) {
+        float scale=800f/760f,dx=(1340-1200*scale)/2;
+        view.onTouchEvent(android.view.MotionEvent.obtain(0,0,action,dx+x*scale,y*scale,0));
+    }
     @Test public void AlarmUsesLocalSystemClockAndCorrectTime() throws Exception {
         try(org.robolectric.android.controller.ActivityController<OfflineActivity> controller=Robolectric.buildActivity(OfflineActivity.class).setup()) {
             MainActivity activity=controller.get();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
