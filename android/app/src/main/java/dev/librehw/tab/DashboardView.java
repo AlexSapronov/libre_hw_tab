@@ -84,7 +84,7 @@ public final class DashboardView extends View {
             device(c, 36, "01", "PROCESSOR", object("cpu"), accent, 0);
             device(c, 490, "02", "GRAPHICS", object("gpu"), secondary, 1);
         }
-        cooling(c);
+        if (playing) gameHardware(c); else cooling(c);
         memory(c);
         if (playing) frameGraph(c); else graph(c);
         text(c, "SYSTEM TELEMETRY", 36, 727, 11, muted, medium);
@@ -100,7 +100,7 @@ public final class DashboardView extends View {
     }
     private void gamePanel(Canvas c) {
         box(c,36,125,890,350,0xFF101B29);
-        JSONObject game=object("game"), cpu=object("cpu"), gpu=object("gpu");
+        JSONObject game=object("game");
         text(c,"01   /   GAME TELEMETRY",60,167,13,accent,medium);
         fit(c,game==null ? "Ожидание игры / обнови Windows-агент" : game.isNull("name") ? "Ожидание игры" : game.optString("name","Ожидание игры"),60,204,25,842,white);
         text(c,number(value(game,"fps")),60,337,118,white,digits);
@@ -113,8 +113,7 @@ public final class DashboardView extends View {
         String status=game!=null && game.optBoolean("paused") ? "ALT+TAB / ОЖИДАНИЕ КАДРОВ" : "PRESENTMON / ПОКАДРОВЫЕ ИЗМЕРЕНИЯ";
         text(c,status,446,365,11,muted,medium);
         line(c,60,394,902,394,0xFF263446,1);
-        text(c,"CPU  "+number(value(cpu,"temperature"))+" °C  /  "+number(value(cpu,"load"))+" %",60,440,20,accent,regular);
-        text(c,"GPU  "+number(value(gpu,"temperature"))+" °C  /  "+number(value(gpu,"load"))+" %",490,440,20,secondary,regular);
+        text(c,"FPS И ВРЕМЯ КАДРА: 1 СЕКУНДА   ·   1% LOW: 10 СЕКУНД",60,440,12,muted,medium);
     }
     private void frameGraph(Canvas c) {
         box(c,324,493,602,197,0xFF101B29);
@@ -159,6 +158,26 @@ public final class DashboardView extends View {
         line(c,x+24,y+266,x+412,y+266,0xFF263446,1);
         stat(c,x+24,y+296,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
         stat(c,x+235,y+296,"МОЩНОСТЬ",number(value(data,"power"))+" W");
+    }
+    private void gameHardware(Canvas c) {
+        box(c,944,125,220,565,0xFF101B29);
+        text(c,"02   /   HARDWARE",966,167,13,accent,medium);
+        hardwareSection(c,205,"GPU",object("gpu"),secondary,83);
+        line(c,966,393,1142,393,0xFF263446,1);
+        hardwareSection(c,430,"CPU",object("cpu"),accent,85);
+        text(c,"ТЕМПЕРАТУРА / ЗАГРУЗКА",966,669,10,muted,medium);
+    }
+    private void hardwareSection(Canvas c,float y,String title,JSONObject data,int color,float warning) {
+        float temperature=value(data,"temperature"),load=value(data,"load");
+        int thermal=Float.isFinite(temperature)&&temperature>=warning ? 0xFFFF7777 : color;
+        text(c,title,966,y,14,color,medium);
+        text(c,number(temperature),966,y+65,58,white,digits);
+        text(c,"°C",1091,y+47,23,thermal,digits);
+        text(c,"ТЕМПЕРАТУРА",966,y+87,10,muted,medium);
+        text(c,"ЗАГРУЗКА",966,y+133,10,muted,medium);
+        p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+" %",1142,y+139,31,white,digits);p.setTextAlign(Paint.Align.LEFT);
+        box(c,966,y+155,176,6,0xFF263446);
+        if(Float.isFinite(load))box(c,966,y+155,176*Math.max(0,Math.min(1,load/100)),6,color);
     }
     private void cooling(Canvas c) {
         float x=944;
