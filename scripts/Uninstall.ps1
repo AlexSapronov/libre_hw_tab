@@ -9,5 +9,10 @@ Get-NetFirewallRule -DisplayName 'Libre HW Tab LAN' -ErrorAction SilentlyContinu
 $destination = Join-Path $env:LOCALAPPDATA 'LibreHwTab\bin'
 Get-Process LibreHwAgent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'LibreHwAgent.exe') } | Stop-Process -Force
 Get-Process PresentMon -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'PresentMon.exe') } | Stop-Process -Force
+$collector = Join-Path $destination 'PresentMon.exe'
+if (Test-Path $collector) {
+    $session = "LibreHwTab-$([Diagnostics.Process]::GetCurrentProcess().SessionId)"
+    Start-Process $collector -ArgumentList @('--session_name', $session, '--terminate_existing_session') -WindowStyle Hidden -Wait
+}
 Remove-Item $destination -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host 'Removed. Pairing settings retained in LocalAppData\LibreHwTab.'

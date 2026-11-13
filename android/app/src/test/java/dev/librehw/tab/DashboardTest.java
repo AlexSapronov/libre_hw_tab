@@ -36,6 +36,8 @@ public class DashboardTest {
         }
         data.getJSONObject("cpu").put("temperature",100).put("load",100);
         view.accept(data,"",true); render(view,"hot");
+        data.getJSONObject("cpu").put("temperature",58).put("load",42);
+        data.getJSONObject("gpu").put("temperature",65).put("load",94);
         data.getJSONObject("game").put("active",true);
         view.accept(data,"",true); render(view,"game-eva");
         view.eva=false; render(view,"game-jade");

@@ -9,6 +9,11 @@ $source = Join-Path $PSScriptRoot 'agent'
 Stop-ScheduledTask -TaskName 'LibreHwTab' -ErrorAction SilentlyContinue
 Get-Process LibreHwAgent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'LibreHwAgent.exe') } | Stop-Process -Force
 Get-Process PresentMon -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'PresentMon.exe') } | Stop-Process -Force
+$collector = Join-Path $destination 'PresentMon.exe'
+if (Test-Path $collector) {
+    $session = "LibreHwTab-$([Diagnostics.Process]::GetCurrentProcess().SessionId)"
+    Start-Process $collector -ArgumentList @('--session_name', $session, '--terminate_existing_session') -WindowStyle Hidden -Wait
+}
 New-Item -ItemType Directory -Force $destination | Out-Null
 Copy-Item "$source\*" $destination -Recurse -Force
 $configPath = Join-Path $env:LOCALAPPDATA 'LibreHwTab\connection.json'

@@ -36,9 +36,18 @@ internal sealed class GamingService : BackgroundService
                 } finally {captureStop.Cancel();try{await Task.WhenAll(stderr,poll);}catch(OperationCanceledException){}}
             } catch(OperationCanceledException)when(stop.IsCancellationRequested){break;}
             catch(Exception ex){lock(gate){history.Clear();detector.Reset();}Volatile.Write(ref view,new(false,ex.Message));}
-            finally {if(child!=null){try{if(!child.HasExited)child.Kill(true);}catch{}child.Dispose();}}
+            finally {if(child!=null){try{if(!child.HasExited)child.Kill(true);}catch{}child.Dispose(); StopOwnSession();}}
             try{await Task.Delay(15000,stop);}catch(OperationCanceledException){break;}
         }
+    }
+    private static void StopOwnSession()
+    {
+        try {
+            var start=new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory,"PresentMon.exe")) {UseShellExecute=false,CreateNoWindow=true};
+            foreach(var arg in new[]{"--session_name",$"LibreHwTab-{Process.GetCurrentProcess().SessionId}","--terminate_existing_session"})start.ArgumentList.Add(arg);
+            using var cleanup=Process.Start(start);
+            if(cleanup!=null && !cleanup.WaitForExit(3000))cleanup.Kill();
+        } catch { }
     }
     private static async Task DrainErrors(StreamReader reader,CancellationToken stop) {while(await reader.ReadLineAsync(stop)!=null){} }
     private async Task Poll(string rulesPath,CancellationToken stop)
