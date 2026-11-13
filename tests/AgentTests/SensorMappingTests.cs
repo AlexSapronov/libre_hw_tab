@@ -12,6 +12,15 @@ public class SensorMappingTests
         Assert.Same(physicalMemory.Object, SensorMapping.PhysicalMemory(new[] { virtualMemory.Object, dimm.Object, physicalMemory.Object }));
         Assert.Null(SensorMapping.PhysicalMemory(new[] { virtualMemory.Object, dimm.Object }));
     }
+    [Fact] public void ShowsInstalledCapacityWithoutMixingVirtualOrUsableMemory()
+    {
+        var physical = new Device("Total Memory",null,40,null,null,null,12.4f,31.2f);
+        var result = PhysicalMemoryInfo.WithInstalledCapacity(physical,32)!;
+        Assert.Equal(32f,result.Total); Assert.Equal(31.2f,result.UsableTotal);
+        Assert.Equal(12.4f,result.Used); Assert.Equal(40f,result.Load);
+        Assert.Null(PhysicalMemoryInfo.WithInstalledCapacity(null,32));
+        Assert.Equal(31.2f,PhysicalMemoryInfo.WithInstalledCapacity(physical,null)!.Total);
+    }
     [Fact] public void TraversesSuperIoAndMapsConfirmedWorkstationHeaders()
     {
         var board = Hardware("ASUS TUF GAMING B650M-PLUS", "/mainboard", HardwareType.Motherboard);
