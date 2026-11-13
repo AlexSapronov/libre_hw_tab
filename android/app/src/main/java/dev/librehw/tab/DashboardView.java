@@ -22,6 +22,9 @@ public final class DashboardView extends View {
     DashboardLayout layout=new DashboardLayout();
     public boolean editing,forceStandby,autoStandby=true,animations=true;
     public JSONObject weather;
+    public long wakeSentUntil;
+    public String weatherCity="Санкт-Петербург";
+    public String weatherHint="Нажми, чтобы обновить";
     public String weatherStatus="Погода загружается…";
     public String nextAlarm="Будильник не задан";
     public Runnable onMenu=()->{},onAlarm=()->{},onWeather=()->{},onWake=()->{},onEditorSave=()->{},onEditorCancel=()->{},onEditorOptions=()->{};
@@ -32,7 +35,7 @@ public final class DashboardView extends View {
     private float downX,downY;
     private final Map<String,RectF> drawnCards=new LinkedHashMap<>();
     private final RectF menuHit=new RectF(312,20,396,86);
-    private final RectF clockBack=new RectF(36,40,230,95),clockAlarm=new RectF(700,545,1164,635),clockWeather=new RectF(700,250,1164,510),clockWake=new RectF(36,635,360,705);
+    private final RectF clockBack=new RectF(36,40,230,95),clockAlarm=new RectF(700,545,1164,635),clockWeather=new RectF(700,250,1164,510),clockWake=new RectF(36,560,600,695);
     public void suppressStandby(){forceStandby=false;suppressedUntil=android.os.SystemClock.elapsedRealtime()+30000;invalidate();}
     public boolean standby(){return !editing && (forceStandby || (autoStandby && sample==null && android.os.SystemClock.elapsedRealtime()-lastGood>=15000 && android.os.SystemClock.elapsedRealtime()>suppressedUntil));}
     public boolean playing(){return mode==2 || (mode==0 && object("game")!=null && object("game").optBoolean("active"));}
@@ -318,18 +321,28 @@ public final class DashboardView extends View {
         text(c,nerv?"NERV // STANDBY":"LIBRE // STANDBY",60,180,16,accent,medium);
         text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
         text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",new Locale("ru"))),60,455,25,muted,regular);
-        String city=weather==null?"Санкт-Петербург":weather.optString("city","Санкт-Петербург");
+        String city=weather==null?weatherCity:weather.optString("city","Санкт-Петербург");
         fit(c,city,730,265,25,400,white);
-        if(weather==null)text(c,weatherStatus,730,335,22,muted,regular);
+        if(weather==null){fit(c,weatherStatus,730,335,22,410,muted);fit(c,weatherHint,730,385,13,410,muted);}
         else {
             valueWithUnit(c,number(value(weather,"temperature")),730,355,78,"°C",24,22,accent);
-            text(c,WeatherClient.description(weather.optInt("code")),730,408,24,muted,regular);
+            fit(c,weather.optString("summary",WeatherClient.description(weather.optInt("code"))),730,408,24,410,muted);
             long age=System.currentTimeMillis()-weather.optLong("fetched",0);
-            text(c,age>3600000?"Сохранённые данные · Open-Meteo":"Open-Meteo",730,447,12,muted,regular);
+            String source=weather.optString("source","Open-Meteo");
+            fit(c,(age>900000?"Сохранено · ":"")+source+" · нажми для обновления",730,447,12,410,muted);
         }
         line(c,730,493,1142,493,0xFF263446,1);
         text(c,"БУДИЛЬНИК  +",730,553,13,accent,medium);fit(c,nextAlarm,730,600,23,410,white);
-        button(c,clockWake,"ВКЛЮЧИТЬ / РАЗБУДИТЬ ПК");
+        boolean waking=android.os.SystemClock.elapsedRealtime()<wakeSentUntil;
+        int powerColor=nerv?0xFFFFB52E:accent;
+        box(c,32,556,572,143,powerColor);
+        box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?0xFF263C43:powerColor);
+        int ink=waking?white:0xFF09121C;
+        p.setColor(ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
+        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);
+        p.setStyle(Paint.Style.FILL);p.setStrokeCap(Paint.Cap.BUTT);
+        text(c,waking?"КОМАНДА ОТПРАВЛЕНА":"ВКЛЮЧИТЬ ПК",145,618,28,ink,medium);
+        text(c,waking?"ЖДУ ПОДКЛЮЧЕНИЯ…":"ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN",145,654,13,ink,regular);
         fit(c,sample==null?"ПК недоступен · "+error:"Соединение с ПК активно",60,738,12,1080,muted);
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {

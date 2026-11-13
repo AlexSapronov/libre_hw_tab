@@ -23,6 +23,8 @@ public class StandbyLayoutTest {
         view.accept(null,"Нет сети",false);ShadowSystemClock.advanceBy(Duration.ofSeconds(16));assertTrue(view.standby());
         view.weather=new JSONObject().put("city","Санкт-Петербург").put("temperature",4).put("code",3).put("fetched",System.currentTimeMillis());view.nextAlarm="пн, 07:30";
         render(view,"standby-jade");view.themeId=6;render(view,"standby-nerv");
+        view.wakeSentUntil=android.os.SystemClock.elapsedRealtime()+10000;render(view,"standby-waking");
+        view.weather=null;view.weatherStatus="Нет связи с погодой";view.weatherHint="Повтор через 30 с · нажми для деталей";render(view,"standby-weather-error");
         view.accept(DemoData.sample(),"",false);assertFalse(view.standby());
     }
     @Test public void LayoutRoundTripRejectsOverlapsAndPreservesModesAndMetricChoice() {

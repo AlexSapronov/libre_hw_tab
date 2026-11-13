@@ -30,6 +30,9 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private HttpURLConnection connection;
     private ScheduledExecutorService extras;
     private long lastWake;
+    private volatile long nextWeatherAttempt;
+    private volatile boolean forceWeather;
+    private String weatherError="";
     private int editorPreviousMode;
     private String editorPreviousLayout;
     private final Runnable alarmTick=new Runnable(){public void run(){if(active){updateAlarm();ui.postDelayed(this,30000);}}};
@@ -51,7 +54,8 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
         dashboard.animations=preferences.getBoolean("animations",true);
         try{dashboard.weather=new JSONObject(preferences.getString("weather_cache",""));}catch(Exception ignored){}
-        dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherCity;dashboard.onWake=this::wake;
+        dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
+        dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
         dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
         setContentView(dashboard);
         immersive();
@@ -59,7 +63,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override protected void onResume() {
         super.onResume(); active=true;restart();ui.post(alarmTick);
-        extras=Executors.newSingleThreadScheduledExecutor();if(weatherEnabled())extras.scheduleWithFixedDelay(this::refreshWeather,0,15,TimeUnit.MINUTES);
+        extras=Executors.newSingleThreadScheduledExecutor();if(weatherEnabled())extras.scheduleWithFixedDelay(this::refreshWeather,0,30,TimeUnit.SECONDS);
     }
     @Override protected void onPause() { active=false;stop();ui.removeCallbacks(alarmTick);if(extras!=null)extras.shutdownNow();super.onPause(); }
     @Override public void onWindowFocusChanged(boolean focus) { super.onWindowFocusChanged(focus); if (focus) immersive(); }
@@ -245,16 +249,36 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     protected boolean weatherEnabled(){return true;}
     private void refreshWeather() {
+        if(!forceWeather && android.os.SystemClock.elapsedRealtime()<nextWeatherAttempt)return;
+        boolean forced=forceWeather;forceWeather=false;
         String city=preferences.getString("weather_city","Санкт-Петербург");
         try {
             JSONObject cached=dashboard.weather;
-            if(cached!=null && city.equals(cached.optString("city")) && System.currentTimeMillis()-cached.optLong("fetched")<900000)return;
+            long age=cached==null?Long.MAX_VALUE:System.currentTimeMillis()-cached.optLong("fetched");
+            if(!forced && cached!=null && city.equals(cached.optString("city")) && age>=0 && age<900000)return;
             double lat=Double.parseDouble(preferences.getString("weather_lat","59.9386")),lon=Double.parseDouble(preferences.getString("weather_lon","30.3141"));
             JSONObject data=WeatherClient.fetch(city,lat,lon);
             if(!city.equals(preferences.getString("weather_city","Санкт-Петербург")))return;
+            nextWeatherAttempt=0;
             preferences.edit().putString("weather_cache",data.toString()).apply();
-            ui.post(()->{if(!isDestroyed()){dashboard.weather=data;dashboard.invalidate();}});
-        }catch(Exception ignored){ui.post(()->{if(!isDestroyed()){dashboard.weatherStatus="Погода недоступна";dashboard.invalidate();}});}
+            ui.post(()->{if(!isDestroyed()){dashboard.weather=data;weatherError="";dashboard.weatherHint="Нажми, чтобы обновить";dashboard.invalidate();}});
+        }catch(Exception ex){
+            nextWeatherAttempt=android.os.SystemClock.elapsedRealtime()+30000;
+            String reason=WeatherClient.reason(ex);
+            ui.post(()->{if(!isDestroyed() && city.equals(preferences.getString("weather_city","Санкт-Петербург"))){weatherError=reason;dashboard.weatherStatus="Нет связи с погодой";dashboard.weatherHint="Повтор через 30 с · нажми для деталей";dashboard.invalidate();}});
+        }
+    }
+    private void weatherActions() {
+        new AlertDialog.Builder(this).setTitle("Погода")
+            .setMessage(weatherError.isEmpty()?"Обновляется с планшета, даже когда ПК выключен.":weatherError)
+            .setPositiveButton("Обновить",(d,w)->requestWeather())
+            .setNeutralButton("Город",(d,w)->weatherCity()).setNegativeButton("Закрыть",null).show();
+    }
+    private void requestWeather() {
+        if(extras==null||extras.isShutdown())return;
+        dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
+        forceWeather=true;nextWeatherAttempt=0;dashboard.weatherStatus="Погода загружается…";dashboard.weatherHint="Запрашиваю данные…";dashboard.invalidate();
+        extras.submit(this::refreshWeather);
     }
     private void weatherCity() {
         EditText city=new EditText(this);city.setSingleLine();city.setText(preferences.getString("weather_city","Санкт-Петербург"));
@@ -267,7 +291,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                     for(int i=0;i<names.length;i++){JSONObject item=cities.getJSONObject(i);names[i]=item.getString("name")+", "+item.optString("admin1")+", "+item.optString("country");}
                     ui.post(()->{if(!active)return;if(names.length==0){Toast.makeText(this,"Город не найден",Toast.LENGTH_LONG).show();return;}
                         new AlertDialog.Builder(this).setTitle("Выбери город").setItems(names,(v,index)->{
-                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";extras.submit(this::refreshWeather);}catch(Exception ignored){}
+                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";requestWeather();}catch(Exception ignored){}
                         }).show();
                     });
                 }catch(Exception ex){ui.post(()->Toast.makeText(this,"Поиск недоступен. Проверь интернет планшета.",Toast.LENGTH_LONG).show());}
@@ -275,10 +299,10 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         }).setNeutralButton("Open-Meteo",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://open-meteo.com/")));}catch(ActivityNotFoundException ignored){}}).setNegativeButton("Отмена",null).show();
     }
     private void wake() {
-        long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;
+        long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;dashboard.wakeSentUntil=now+10000;dashboard.invalidate();
         pairingWorker.submit(()->{
             try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->{dashboard.forceStandby=false;dashboard.invalidate();Toast.makeText(this,"Команда отправлена. Жду подключения к ПК…",Toast.LENGTH_LONG).show();});}
-            catch(Exception ex){ui.post(()->Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show());}
+            catch(Exception ex){ui.post(()->{lastWake=0;dashboard.wakeSentUntil=0;dashboard.invalidate();Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show();});}
         });
     }
     private void wakeOptions() {
