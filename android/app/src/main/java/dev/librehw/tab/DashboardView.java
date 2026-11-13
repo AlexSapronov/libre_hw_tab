@@ -75,7 +75,8 @@ public final class DashboardView extends View {
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "OFFLINE  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
         device(c, 36, "01", "PROCESSOR", object("cpu"), accent, 0);
-        device(c, 610, "02", "GRAPHICS", object("gpu"), secondary, 1);
+        device(c, 490, "02", "GRAPHICS", object("gpu"), secondary, 1);
+        cooling(c);
         memory(c);
         graph(c);
         text(c, "SYSTEM TELEMETRY", 36, 727, 11, muted, medium);
@@ -89,35 +90,47 @@ public final class DashboardView extends View {
     }
     private void device(Canvas c, float x, String index, String title, JSONObject data, int color, int series) {
         float y = 125;
-        box(c,x,y,554,326,0xFF101B29);
+        box(c,x,y,436,350,0xFF101B29);
         line(c,x+24,y+26,x+24,y+47,color,3);
         text(c,index+"   /   "+title,x+39,y+42,13,color,medium);
-        fit(c,data == null ? "Ожидание датчика" : data.optString("name","—"),x+24,y+78,21,505,white);
+        fit(c,data == null ? "Ожидание датчика" : data.optString("name","—"),x+24,y+78,21,388,white);
         float temp = value(data,"temperature"), load = value(data,"load");
         int thermal = Float.isFinite(temp) && temp >= (series==0?85:83) ? 0xFFFF7777 : color;
-        text(c,number(temp),x+24,y+191,100,white,digits);
-        p.setTypeface(digits); p.setTextSize(100);
+        text(c,number(temp),x+24,y+191,82,white,digits);
+        p.setTypeface(digits); p.setTextSize(82);
         float unitX = x+24+p.measureText(number(temp))+8;
-        text(c,"°C",unitX,y+146,26,thermal,digits);
+        text(c,"°C",unitX,y+146,24,thermal,digits);
         text(c,"ТЕМПЕРАТУРА",x+27,y+220,11,muted,medium);
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(10); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF253245);
-        RectF arc = new RectF(x+348,y+112,x+500,y+264); c.drawArc(arc,140,260,false,p);
+        RectF arc = new RectF(x+274,y+120,x+410,y+256); c.drawArc(arc,140,260,false,p);
         if (Float.isFinite(load)) { p.setColor(color); c.drawArc(arc,140,260*Math.max(0,Math.min(1,load/100)),false,p); }
         p.setStrokeCap(Paint.Cap.BUTT); p.setStyle(Paint.Style.FILL);
-        loadLabel(c, x+424, y+188, load);
-        line(c,x+24,y+252,x+310,y+252,0xFF263446,1);
-        if (series == 0) {
-            stat(c,x+24,y+280,"ЧАСТОТА",number(value(data,"clock"))+" MHz",18);
-            stat(c,x+130,y+280,"МОЩНОСТЬ",number(value(data,"power"))+" W",18);
-            boolean profile = data != null && data.optBoolean("coolingProfile");
-            stat(c,x+236,y+280,profile ? "ВЕРХ / AIO" : "CPU / AIO",number(value(data,"fan"))+" RPM",18);
-            stat(c,x+342,y+280,"БОК / ВДУВ",number(value(data,"sideFan"))+" RPM",18);
-            stat(c,x+448,y+280,"ПОМПА",number(value(data,"pump"))+" RPM",18);
-        } else {
-            stat(c,x+24,y+278,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
-            stat(c,x+193,y+278,"МОЩНОСТЬ",number(value(data,"power"))+" W");
-            stat(c,x+367,y+293,"ВЕНТИЛЯТОР",number(value(data,"fan"))+" RPM");
-        }
+        loadLabel(c, x+342, y+188, load);
+        line(c,x+24,y+266,x+412,y+266,0xFF263446,1);
+        stat(c,x+24,y+296,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
+        stat(c,x+235,y+296,"МОЩНОСТЬ",number(value(data,"power"))+" W");
+    }
+    private void cooling(Canvas c) {
+        float x=944;
+        box(c,x,125,220,565,0xFF101B29);
+        text(c,"04   /   COOLING",x+22,167,13,accent,medium);
+        JSONObject cpu=object("cpu"), gpu=object("gpu");
+        boolean profile=cpu!=null && cpu.optBoolean("coolingProfile");
+        coolingRow(c,x,205,profile ? "ВЕРХ / AIO" : "CPU / AIO",value(cpu,"fan"),profile ? "Fan #1" : sensorName(cpu,"fanName"),accent);
+        coolingRow(c,x,315,"БОК / ВДУВ",value(cpu,"sideFan"),profile ? "Fan #2" : "КОРПУС",accent);
+        coolingRow(c,x,425,"ПОМПА",value(cpu,"pump"),profile ? "Fan #7" : sensorName(cpu,"pumpName"),accent);
+        coolingRow(c,x,535,"GPU / ВЕНТИЛЯТОР",value(gpu,"fan"),"ВИДЕОКАРТА",secondary);
+        text(c,"ТОЛЬКО МОНИТОРИНГ",x+22,669,10,muted,medium);
+    }
+    private String sensorName(JSONObject data,String key) {
+        return data==null || data.isNull(key) ? "ДАТЧИК НЕДОСТУПЕН" : data.optString(key,"ДАТЧИК НЕДОСТУПЕН");
+    }
+    private void coolingRow(Canvas c,float x,float y,String title,float rpm,String source,int color) {
+        text(c,title,x+22,y,12,color,medium);
+        text(c,number(rpm),x+22,y+46,39,white,digits);
+        text(c,"RPM",x+165,y+44,12,muted,medium);
+        fit(c,source,x+22,y+67,10,176,muted);
+        line(c,x+22,y+86,x+198,y+86,0xFF263446,1);
     }
     private void loadLabel(Canvas c, float centerX, float centerY, float load) {
         p.setTypeface(digits); p.setTextSize(46); Paint.FontMetrics big = p.getFontMetrics();
@@ -134,20 +147,21 @@ public final class DashboardView extends View {
         text(c,title,x,y,10,muted,medium); text(c,val,x,y+26,size,white,regular);
     }
     private void memory(Canvas c) {
-        box(c,36,469,344,221,0xFF101B29);
-        text(c,"03   /   MEMORY",60,502,13,accent,medium);
+        box(c,36,493,270,197,0xFF101B29);
+        text(c,"03   /   MEMORY",60,526,13,accent,medium);
         JSONObject ram = object("memory"); float used=value(ram,"used"), total=value(ram,"total"), load=value(ram,"load");
-        text(c,decimal(used),60,564,52,white,digits);
-        text(c,"/ "+number(total)+" GB",193,559,22,muted,digits);
-        for (int i=0;i<24;i++) box(c,60+i*12,586,7,26,Float.isFinite(load) && i<load/100*24 ? accent:0xFF263446);
-        text(c,"ИСПОЛЬЗОВАНО",60,651,11,muted,medium); text(c,number(load)+" %",271,651,20,white,regular);
+        text(c,decimal(used),60,580,42,white,digits);
+        text(c,"/ "+number(total)+" GB",183,576,20,muted,digits);
+        for (int i=0;i<24;i++) box(c,60+i*9.2f,600,6,24,Float.isFinite(load) && i<load/100*24 ? accent:0xFF263446);
+        text(c,"ИСПОЛЬЗОВАНО",60,661,10,muted,medium);
+        p.setTextAlign(Paint.Align.RIGHT); text(c,number(load)+" %",282,661,20,white,regular); p.setTextAlign(Paint.Align.LEFT);
     }
     private void graph(Canvas c) {
-        box(c,398,469,766,221,0xFF101B29);
-        text(c,"THERMAL HISTORY",422,502,13,white,medium);
-        text(c,"CPU",865,502,11,accent,medium); text(c,"GPU",916,502,11,secondary,medium); text(c,"3 МИН",1065,502,11,muted,medium);
-        float left=435, top=527, width=680, height=113;
-        for(int i=0;i<3;i++) { float y=top+i*height/2; line(c,left,y,left+width,y,0xFF263446,1); text(c,""+(100-i*50),1126,y+4,10,muted,regular); }
+        box(c,324,493,602,197,0xFF101B29);
+        text(c,"THERMAL HISTORY",348,526,13,white,medium);
+        text(c,"CPU",688,526,11,accent,medium); text(c,"GPU",739,526,11,secondary,medium); text(c,"3 МИН",842,526,11,muted,medium);
+        float left=348, top=547, width=520, height=105;
+        for(int i=0;i<3;i++) { float y=top+i*height/2; line(c,left,y,left+width,y,0xFF263446,1); text(c,""+(100-i*50),884,y+4,10,muted,regular); }
         for(int series=0;series<2;series++) {
             Path path=new Path(); boolean started=false; int i=180-history.size();
             for(float[] point:history) {
@@ -158,7 +172,7 @@ public final class DashboardView extends View {
             }
             p.setColor(series==0?accent:secondary); p.setStrokeWidth(2.5f); p.setStyle(Paint.Style.STROKE); p.setStrokeJoin(Paint.Join.ROUND); c.drawPath(path,p); p.setStyle(Paint.Style.FILL);
         }
-        text(c,"−180 с",435,668,10,muted,regular); text(c,"−90 с",755,668,10,muted,regular); text(c,"СЕЙЧАС",1065,668,10,muted,regular);
+        text(c,"−180 с",348,675,10,muted,regular); text(c,"−90 с",587,675,10,muted,regular); text(c,"СЕЙЧАС",821,675,10,muted,regular);
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         if(event.getAction()==MotionEvent.ACTION_UP) {

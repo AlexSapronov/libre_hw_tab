@@ -48,8 +48,8 @@ public class DashboardTest {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);
         view.draw(new Canvas(bitmap));
         float scale=800f/760f, dx=(1340-1200*scale)/2;
-        for (float cardX : new float[] {36,610}) {
-            float center=dx+(cardX+424)*scale;
+        for (float cardX : new float[] {36,490}) {
+            float center=dx+(cardX+342)*scale;
             int min=1340,max=0;
             for (int y=(int)((125+148)*scale);y<(125+205)*scale;y++) {
                 for (int x=(int)(center-65*scale);x<center+65*scale;x++) {
