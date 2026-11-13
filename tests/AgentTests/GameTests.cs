@@ -89,4 +89,18 @@ public class GameTests
         Assert.InRange(view.Low1!.Value,59,61);
     }
 
+    [Fact] public void LowPointOneProgressAndValueSurviveWebJsonSerialization()
+    {
+        var history=new FrameHistory();
+        for(int i=0;i<500;i++)history.Add(new("wow.exe",42,"main",i/120.0,8.333),now.AddSeconds(i/120.0));
+        var pending=history.ForProcess(42,now.AddSeconds(4.2))!;
+        Assert.Null(pending.Low01);Assert.Equal(500,pending.Low01Samples);
+        for(int i=500;i<1500;i++)history.Add(new("wow.exe",42,"main",i/120.0,8.333),now.AddSeconds(i/120.0));
+        var ready=history.ForProcess(42,now.AddSeconds(12.5))!;
+        using var json=System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(ready,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        Assert.InRange(json.RootElement.GetProperty("low01").GetDouble(),119,121);
+        Assert.Equal(1500,json.RootElement.GetProperty("low01Samples").GetInt32());
+        Assert.InRange(json.RootElement.GetProperty("low01Seconds").GetDouble(),12,13);
+    }
+
 }

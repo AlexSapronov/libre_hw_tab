@@ -75,6 +75,13 @@ public class StandbyLayoutTest {
         for(String invalid:new String[]{"invalid","ff:ff:ff:ff:ff:ff","00:00:00:00:00:00"}){try{WakeClient.packet(invalid);fail();}catch(IllegalArgumentException expected){}}
         assertEquals("Нет данных",WeatherClient.description(999));assertEquals("Снег",WeatherClient.description(73));
     }
+    @Test public void LowPointOneDistinguishesOldAgentWarmupAndReadyValue() throws Exception {
+        assertEquals("ОБНОВИ АГЕНТ ПК",DashboardView.low01Status(new JSONObject("{active:true}")));
+        assertEquals("500 / 1000 КАДРОВ",DashboardView.low01Status(new JSONObject("{low01:null,low01Samples:500,low01Seconds:4}")));
+        assertEquals("8 / 10 СЕКУНД",DashboardView.low01Status(new JSONObject("{low01:null,low01Samples:1200,low01Seconds:8}")));
+        assertEquals("FPS",DashboardView.low01Status(new JSONObject("{low01:94,low01Samples:1500}")));
+        assertEquals("ПАУЗА",DashboardView.low01Status(new JSONObject("{low01:null,paused:true}")));
+    }
     private void render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));
         File folder=new File("build/screenshots");folder.mkdirs();try(FileOutputStream out=new FileOutputStream(new File(folder,name+".png"))){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));}bitmap.recycle();

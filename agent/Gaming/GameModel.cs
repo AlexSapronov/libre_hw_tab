@@ -5,7 +5,7 @@ using System.Text.Json;
 internal record FrameSample(string Application, int Pid, string Chain, double Time, double Ms);
 internal record ForegroundApp(int Pid, string Exe, string Path, string Title, bool Fullscreen);
 internal record GameView(bool Active, string Status, string? Name = null, int? Pid = null, double? Fps = null,
-    double? FrameTime = null, double? Low1 = null, double[]? Frames = null, bool Paused = false, string? SourceId = null, double?[]? FrameSeries = null, int HistorySeconds = 60, int BucketMs = 200, double? Low01 = null);
+    double? FrameTime = null, double? Low1 = null, double[]? Frames = null, bool Paused = false, string? SourceId = null, double?[]? FrameSeries = null, int HistorySeconds = 60, int BucketMs = 200, [property: System.Text.Json.Serialization.JsonPropertyName("low01")] double? Low01 = null, int Low01Samples = 0, double Low01Seconds = 0);
 internal record GameRules(string[]? Include = null, string[]? Exclude = null);
 
 internal sealed class PresentCsv
@@ -87,7 +87,7 @@ internal sealed class FrameHistory
         double? low01=minute.Count>=1000 && last.Time-minute.Peek().Time>=10
             ?1000/minute.Select(f=>f.Ms).OrderByDescending(ms=>ms).Take(Math.Max(1,(int)Math.Ceiling(minute.Count*.001))).Average():null;
         return new(false,"ready",last.Application,pid,1000/recent.Average(),recent.Average(),low,
-            all.TakeLast(180).ToArray(),false,$"{pid}:{last.Chain}",series,Low01:low01);
+            all.TakeLast(180).ToArray(),false,$"{pid}:{last.Chain}",series,Low01:low01,Low01Samples:minute.Count,Low01Seconds:last.Time-minute.Peek().Time);
     }
     internal void Clear() {buffers.Clear();peaks.Clear();minuteFrames.Clear();}
 }

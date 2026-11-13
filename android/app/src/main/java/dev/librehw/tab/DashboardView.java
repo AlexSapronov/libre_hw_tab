@@ -140,9 +140,21 @@ public final class DashboardView extends View {
         fit(c,game==null ? "Ожидание игры / обнови Windows-агент" : game.isNull("name") ? "Ожидание игры" : game.optString("name","Ожидание игры"),60,204,25,842,white);
         if(layout.metric("fps")){text(c,number(value(game,"fps")),60,337,118,white,digits);text(c,"PRESENTED FPS",64,365,12,accent,medium);}
         if(layout.metric("low1")){text(c,"1% LOW · 10 С",430,246,10,muted,medium);text(c,number(value(game,"low1")),430,307,38,white,digits);text(c,"FPS",430,332,11,muted,medium);}
-        if(layout.metric("low01")){text(c,"0,1% LOW · 60 С",590,246,10,muted,medium);text(c,number(value(game,"low01")),590,307,38,white,digits);text(c,"FPS",590,332,11,muted,medium);}
+        if(layout.metric("low01")){text(c,"0,1% LOW · 60 С",590,246,10,muted,medium);text(c,number(value(game,"low01")),590,307,38,white,digits);fit(c,low01Status(game),590,332,10,148,muted);}
         if(layout.metric("frameTime")){text(c,"ВРЕМЯ КАДРА",750,246,10,muted,medium);text(c,decimal(value(game,"frameTime")),750,307,38,white,digits);text(c,"мс",750,332,11,muted,medium);}
         if(game!=null && game.optBoolean("paused"))text(c,"ALT+TAB / ОЖИДАНИЕ КАДРОВ",446,365,11,muted,medium);
+    }
+    static String low01Status(JSONObject game) {
+        if(game==null)return "НЕТ ДАННЫХ";
+        if(game.optBoolean("paused"))return "ПАУЗА";
+        if(!game.has("low01"))return "ОБНОВИ АГЕНТ ПК";
+        if(!Float.isNaN(value(game,"low01")))return "FPS";
+        if(game.has("low01Samples")) {
+            int samples=game.optInt("low01Samples");double seconds=game.optDouble("low01Seconds",0);
+            if(samples<1000)return samples+" / 1000 КАДРОВ";
+            return Math.min(10,(int)seconds)+" / 10 СЕКУНД";
+        }
+        return "НАКОПЛЕНИЕ КАДРОВ";
     }
     private void frameGraph(Canvas c) {
         box(c,324,443,602,247,panel);
