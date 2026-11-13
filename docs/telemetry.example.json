@@ -2,8 +2,40 @@
   "version": 1,
   "timestamp": "2026-11-13T20:00:00Z",
   "host": "EXAMPLE-PC",
-  "cpu": { "name": "AMD Ryzen 7 7800X3D", "temperature": 60.0, "load": 30.0, "clock": 4800.0, "power": 65.0, "fan": null, "used": null, "total": null },
-  "gpu": { "name": "NVIDIA GeForce RTX 5070 Ti", "temperature": 65.0, "load": 85.0, "clock": 2700.0, "power": 240.0, "fan": 1400.0, "used": null, "total": null },
-  "memory": { "name": "Generic Memory", "temperature": null, "load": 50.0, "clock": null, "power": null, "fan": null, "used": 16.0, "total": 32.0 },
+  "cpu": {
+    "name": "AMD Ryzen 7 7800X3D",
+    "temperature": 60.0,
+    "load": 30.0,
+    "clock": 4800.0,
+    "power": 65.0,
+    "fan": 765,
+    "used": null,
+    "total": null,
+    "pump": 2705,
+    "sideFan": 1467,
+    "fanName": "Fan #1",
+    "pumpName": "Fan #7",
+    "coolingProfile": true
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 5070 Ti",
+    "temperature": 65.0,
+    "load": 85.0,
+    "clock": 2700.0,
+    "power": 240.0,
+    "fan": 1400.0,
+    "used": null,
+    "total": null
+  },
+  "memory": {
+    "name": "Total Memory",
+    "temperature": null,
+    "load": 50.0,
+    "clock": null,
+    "power": null,
+    "fan": null,
+    "used": 16.0,
+    "total": 32.0
+  },
   "sensorError": null
 }

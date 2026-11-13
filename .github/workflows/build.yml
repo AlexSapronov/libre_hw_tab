@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Test physical RAM and cooling sensor selection
+        run: dotnet test tests/AgentTests/LibreHwAgent.Tests.csproj -c Release
       - name: Publish self-contained companion
         run: dotnet publish agent/LibreHwAgent.csproj -c Release -o package/agent
       - name: Validate installer syntax and smoke-test authenticated API
