@@ -8,6 +8,7 @@ $destination = Join-Path $env:LOCALAPPDATA 'LibreHwTab\bin'
 $source = Join-Path $PSScriptRoot 'agent'
 Stop-ScheduledTask -TaskName 'LibreHwTab' -ErrorAction SilentlyContinue
 Get-Process LibreHwAgent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'LibreHwAgent.exe') } | Stop-Process -Force
+Get-Process PresentMon -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'PresentMon.exe') } | Stop-Process -Force
 New-Item -ItemType Directory -Force $destination | Out-Null
 Copy-Item "$source\*" $destination -Recurse -Force
 $configPath = Join-Path $env:LOCALAPPDATA 'LibreHwTab\connection.json'

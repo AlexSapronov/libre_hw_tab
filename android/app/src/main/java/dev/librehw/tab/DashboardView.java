@@ -15,6 +15,9 @@ public final class DashboardView extends View {
     private String error = "Ожидание подключения";
     private boolean demo;
     public boolean eva;
+    public int mode; // 0 automatic, 1 overview, 2 game
+    public Runnable onModeChange = () -> { mode=(mode+1)%3; invalidate(); };
+    private final RectF modeHit = new RectF(410,20,654,86);
     private float scale = 1, offsetX, offsetY;
     private int accent, secondary;
     private final int white = Color.rgb(236, 244, 249), muted = Color.rgb(134, 153, 173);
@@ -68,25 +71,70 @@ public final class DashboardView extends View {
         text(c, "LIBRE", 36, 53, 29, white, medium); text(c, "H W   T A B", 144, 52, 16, accent, medium);
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         text(c, time, 700, 53, 27, white, digits);
+        boolean playing = mode==2 || (mode==0 && object("game")!=null && object("game").optBoolean("active"));
+        button(c, modeHit, mode==0 ? (playing ? "AUTO / ИГРА" : "AUTO / ОБЗОР") : mode==1 ? "РЕЖИМ / ОБЗОР" : "РЕЖИМ / ИГРА");
         button(c, themeHit, eva ? "THEME / EVA" : "THEME / JADE"); button(c, settingsHit, "ПОДКЛЮЧЕНИЕ");
         boolean healthy = sample != null && sample.isNull("sensorError");
         int status = sample == null ? secondary : healthy ? accent : 0xFFFF7777;
         p.setColor(status); c.drawCircle(43, 93, 4, p);
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "OFFLINE  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
-        device(c, 36, "01", "PROCESSOR", object("cpu"), accent, 0);
-        device(c, 490, "02", "GRAPHICS", object("gpu"), secondary, 1);
+        if (playing) gamePanel(c);
+        else {
+            device(c, 36, "01", "PROCESSOR", object("cpu"), accent, 0);
+            device(c, 490, "02", "GRAPHICS", object("gpu"), secondary, 1);
+        }
         cooling(c);
         memory(c);
-        graph(c);
+        if (playing) frameGraph(c); else graph(c);
         text(c, "SYSTEM TELEMETRY", 36, 727, 11, muted, medium);
         String footer = sample != null && !sample.isNull("sensorError") ? "Ошибка чтения датчиков — проверь агент и права администратора" : "Обновление 1 с   ·   Температура, загрузка и частоты — доступные датчики ПК";
+        JSONObject game = object("game");
+        if(game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting")) footer="FPS: "+game.optString("status");
         fit(c, footer, 250, 727, 12, 910, muted);
         c.restore();
     }
     private void button(Canvas c, RectF r, String label) {
         box(c, r.left, r.top+7, r.width(), 40, 0xFF152131);
         text(c, label, r.left+14, r.top+33, 12, muted, medium);
+    }
+    private void gamePanel(Canvas c) {
+        box(c,36,125,890,350,0xFF101B29);
+        JSONObject game=object("game"), cpu=object("cpu"), gpu=object("gpu");
+        text(c,"01   /   GAME TELEMETRY",60,167,13,accent,medium);
+        fit(c,game==null ? "Ожидание игры / обнови Windows-агент" : game.isNull("name") ? "Ожидание игры" : game.optString("name","Ожидание игры"),60,204,25,842,white);
+        text(c,number(value(game,"fps")),60,337,118,white,digits);
+        text(c,"PRESENTED FPS",64,365,12,accent,medium);
+        stat(c,446,262,"1% LOW · 10 С",number(value(game,"low1")),43);
+        stat(c,680,262,"СРЕДНЕЕ ВРЕМЯ КАДРА",decimal(value(game,"frameTime")),43);
+        text(c,"FPS",446,317,11,muted,medium); text(c,"мс",680,317,11,muted,medium);
+        String status=game!=null && game.optBoolean("paused") ? "ALT+TAB / ОЖИДАНИЕ КАДРОВ" : "PRESENTMON / ПОКАДРОВЫЕ ИЗМЕРЕНИЯ";
+        text(c,status,446,365,11,muted,medium);
+        line(c,60,394,902,394,0xFF263446,1);
+        text(c,"CPU  "+number(value(cpu,"temperature"))+" °C  /  "+number(value(cpu,"load"))+" %",60,440,20,accent,regular);
+        text(c,"GPU  "+number(value(gpu,"temperature"))+" °C  /  "+number(value(gpu,"load"))+" %",490,440,20,secondary,regular);
+    }
+    private void frameGraph(Canvas c) {
+        box(c,324,493,602,197,0xFF101B29);
+        text(c,"FRAME TIME",348,526,13,white,medium);
+        text(c,"ПОСЛЕДНИЕ 180 КАДРОВ",742,526,10,muted,medium);
+        JSONObject game=object("game"); JSONArray frames=game==null?null:game.optJSONArray("frames");
+        float limit=33.4f;
+        if(frames!=null) for(int i=0;i<frames.length();i++) {double v=frames.optDouble(i);if(Double.isFinite(v)&&v>0)limit=Math.max(limit,(float)v);}
+        limit=(float)Math.ceil(limit/8.333f)*8.333f;
+        float left=348,top=547,width=520,height=105;
+        for(int i=0;i<3;i++) {float y=top+i*height/2;line(c,left,y,left+width,y,0xFF263446,1);text(c,number(limit*(1-i/2f)),884,y+4,10,muted,regular);}
+        if(frames==null || frames.length()<2) text(c,"Ожидание покадровых данных…",440,610,15,muted,regular);
+        else {
+            Path path=new Path(); boolean started=false; int count=Math.min(frames.length(),180),start=frames.length()-count;
+            for(int i=0;i<count;i++) {
+                double v=frames.optDouble(start+i);if(!Double.isFinite(v)||v<=0){started=false;continue;}
+                float x=left+width*i/Math.max(1,count-1),y=top+height*(1-(float)v/limit);
+                if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
+            }
+            p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+        }
+        text(c,"мс / кадр",348,675,10,muted,regular);text(c,"СЕЙЧАС",821,675,10,muted,regular);
     }
     private void device(Canvas c, float x, String index, String title, JSONObject data, int color, int series) {
         float y = 125;
@@ -178,6 +226,7 @@ public final class DashboardView extends View {
         if(event.getAction()==MotionEvent.ACTION_UP) {
             float x=(event.getX()-offsetX)/scale, y=(event.getY()-offsetY)/scale;
             if(settingsHit.contains(x,y)) { performClick(); settings.run(); }
+            else if(modeHit.contains(x,y)) { performClick(); onModeChange.run(); }
             else if(themeHit.contains(x,y)) { performClick(); theme.run(); }
         }
         return true;

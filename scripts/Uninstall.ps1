@@ -8,5 +8,6 @@ Unregister-ScheduledTask -TaskName 'LibreHwTab' -Confirm:$false -ErrorAction Sil
 Get-NetFirewallRule -DisplayName 'Libre HW Tab LAN' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 $destination = Join-Path $env:LOCALAPPDATA 'LibreHwTab\bin'
 Get-Process LibreHwAgent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'LibreHwAgent.exe') } | Stop-Process -Force
+Get-Process PresentMon -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $destination 'PresentMon.exe') } | Stop-Process -Force
 Remove-Item $destination -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host 'Removed. Pairing settings retained in LocalAppData\LibreHwTab.'

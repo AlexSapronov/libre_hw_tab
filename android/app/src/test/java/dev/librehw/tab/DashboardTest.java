@@ -36,6 +36,12 @@ public class DashboardTest {
         }
         data.getJSONObject("cpu").put("temperature",100).put("load",100);
         view.accept(data,"",true); render(view,"hot");
+        data.getJSONObject("game").put("active",true);
+        view.accept(data,"",true); render(view,"game-eva");
+        view.eva=false; render(view,"game-jade");
+        data.getJSONObject("game").put("paused",true).put("fps",org.json.JSONObject.NULL).put("frames",new org.json.JSONArray());
+        view.accept(data,"",true);render(view,"game-paused");
+        view.mode=1;render(view,"game-overview-override");view.mode=0;
         view.accept(null,"ПК выключен",false); render(view,"offline");
         data.put("cpu",JSONObject.NULL).put("gpu",JSONObject.NULL).put("memory",JSONObject.NULL);
         view.accept(data,"",false); render(view,"missing");

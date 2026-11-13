@@ -22,6 +22,9 @@ try {
     if (!$ready) { throw 'Agent did not return a sample' }
     $sample = $response.Content | ConvertFrom-Json
     if ($sample.version -ne 1 -or !$sample.timestamp -or !$sample.host) { throw 'Invalid telemetry schema' }
+    if ($null -eq $sample.game -or $null -eq $sample.game.active -or !$sample.game.status) { throw 'Missing game status schema' }
+    $help = Start-Process (Join-Path $PWD 'package/agent/PresentMon.exe') -ArgumentList '--help' -Wait -PassThru -NoNewWindow
+    if ($help.ExitCode -ne 0) { throw 'Bundled PresentMon does not run' }
     $noKey = Invoke-WebRequest $url -SkipHttpErrorCheck
     $badKey = Invoke-WebRequest $url -Headers @{ 'X-Libre-Token' = 'wrong' } -SkipHttpErrorCheck
     if ($noKey.StatusCode -ne 401 -or $badKey.StatusCode -ne 401) { throw 'Authentication failed' }
