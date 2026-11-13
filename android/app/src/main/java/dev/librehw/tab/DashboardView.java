@@ -96,7 +96,9 @@ public final class DashboardView extends View {
         float temp = value(data,"temperature"), load = value(data,"load");
         int thermal = Float.isFinite(temp) && temp >= (series==0?85:83) ? 0xFFFF7777 : color;
         text(c,number(temp),x+24,y+191,100,white,digits);
-        text(c,"°C",x+162,y+146,26,thermal,digits);
+        p.setTypeface(digits); p.setTextSize(100);
+        float unitX = x+24+p.measureText(number(temp))+8;
+        text(c,"°C",unitX,y+146,26,thermal,digits);
         text(c,"ТЕМПЕРАТУРА",x+27,y+220,11,muted,medium);
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(10); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF253245);
         RectF arc = new RectF(x+348,y+112,x+500,y+264); c.drawArc(arc,140,260,false,p);

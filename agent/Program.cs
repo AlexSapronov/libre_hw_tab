@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json;
 using LibreHardwareMonitor.Hardware;
 
+using var singleton = new Mutex(true, "Local\\LibreHwTabAgent", out var first);
+if (!first) return;
 var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LibreHwTab");
 Directory.CreateDirectory(dataDir);
 var configPath = Path.Combine(dataDir, "connection.json");
@@ -14,8 +16,6 @@ var config = File.Exists(configPath)
     : new Connection(8750, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant());
 if (config.Port is < 1024 or > 65535 || config.Token.Length < 16) throw new InvalidOperationException("Invalid connection.json");
 File.WriteAllText(configPath, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
-using var singleton = new Mutex(true, "Local\\LibreHwTabAgent", out var first);
-if (!first) return;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://0.0.0.0:{config.Port}");
 // Never log URLs: they can contain a pairing token.
