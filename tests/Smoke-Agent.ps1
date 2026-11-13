@@ -4,6 +4,8 @@ foreach ($file in @('scripts/Install.ps1', 'scripts/Uninstall.ps1')) {
     [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$tokens, [ref]$errors) | Out-Null
     if ($errors.Count) { throw ($errors | Out-String) }
 }
+$qrTest = Start-Process (Join-Path $PWD 'package/agent/LibreHwAgent.exe') -ArgumentList '--pair-test' -PassThru -Wait
+if ($qrTest.ExitCode -ne 0) { throw 'QR generation self-test failed' }
 $process = Start-Process (Join-Path $PWD 'package/agent/LibreHwAgent.exe') -PassThru
 try {
     $configPath = Join-Path $env:LOCALAPPDATA 'LibreHwTab/connection.json'
@@ -24,7 +26,7 @@ try {
     $badKey = Invoke-WebRequest $url -Headers @{ 'X-Libre-Token' = 'wrong' } -SkipHttpErrorCheck
     if ($noKey.StatusCode -ne 401 -or $badKey.StatusCode -ne 401) { throw 'Authentication failed' }
     if ($response.Headers['Cache-Control'] -notcontains 'no-store') { throw 'Telemetry must not be cached' }
-    Write-Host 'PASS: API schema, no-key/wrong-key rejection, valid-key response, no-store, installer syntax.'
+    Write-Host 'PASS: QR payload/PNG generation, API schema, no-key/wrong-key rejection, valid-key response, no-store, installer syntax.'
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
 }

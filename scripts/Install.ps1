@@ -29,6 +29,7 @@ Register-ScheduledTask -TaskName 'LibreHwTab' -Action $action -Trigger $trigger 
 Get-NetFirewallRule -DisplayName 'Libre HW Tab LAN' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -DisplayName 'Libre HW Tab LAN' -Direction Inbound -Action Allow -Program $exe -Protocol TCP -LocalPort $config.Port -RemoteAddress LocalSubnet -Profile Private | Out-Null
 Start-ScheduledTask -TaskName 'LibreHwTab'
+Start-Process $exe -ArgumentList '--pair'
 Write-Host "`nInstalled. Set your home network profile to Private. Tablet and PC must be on the same LAN."
 Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254.*' } | ForEach-Object { Write-Host "Address: http://$($_.IPAddress):$($config.Port)" }
 Write-Host "Pairing key: $($config.Token)"

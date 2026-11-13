@@ -10,3 +10,8 @@ Dependencies transitively included by NuGet retain their respective licenses and
 PawnIO is a separate optional prerequisite installed by the user from https://pawnio.eu/; its installer is not redistributed by this project.
 
 Android components are built against the Android SDK; the app uses only platform APIs.
+
+QR generation: QRCoder 1.6.0, MIT license, https://github.com/Shane32/QRCoder .
+Android QR scanner: ZXing Android Embedded 4.3.0 (JourneyApps), Apache-2.0, https://github.com/journeyapps/zxing-android-embedded/tree/v4.3.0 .
+ZXing core: Apache-2.0, https://github.com/zxing/zxing .
+AndroidX Activity and transitive AndroidX dependencies: Apache-2.0, https://android.googlesource.com/platform/frameworks/support/ .
