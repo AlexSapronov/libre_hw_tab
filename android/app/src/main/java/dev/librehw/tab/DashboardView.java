@@ -105,9 +105,11 @@ public final class DashboardView extends View {
         fit(c,game==null ? "Ожидание игры / обнови Windows-агент" : game.isNull("name") ? "Ожидание игры" : game.optString("name","Ожидание игры"),60,204,25,842,white);
         text(c,number(value(game,"fps")),60,337,118,white,digits);
         text(c,"PRESENTED FPS",64,365,12,accent,medium);
-        stat(c,446,262,"1% LOW · 10 С",number(value(game,"low1")),43);
-        stat(c,680,262,"СРЕДНЕЕ ВРЕМЯ КАДРА",decimal(value(game,"frameTime")),43);
-        text(c,"FPS",446,317,11,muted,medium); text(c,"мс",680,317,11,muted,medium);
+        text(c,"1% LOW · 10 С",446,246,11,muted,medium);
+        text(c,"СРЕДНЕЕ ВРЕМЯ КАДРА",680,246,11,muted,medium);
+        text(c,number(value(game,"low1")),446,307,43,white,digits);
+        text(c,decimal(value(game,"frameTime")),680,307,43,white,digits);
+        text(c,"FPS",446,332,11,muted,medium); text(c,"мс",680,332,11,muted,medium);
         String status=game!=null && game.optBoolean("paused") ? "ALT+TAB / ОЖИДАНИЕ КАДРОВ" : "PRESENTMON / ПОКАДРОВЫЕ ИЗМЕРЕНИЯ";
         text(c,status,446,365,11,muted,medium);
         line(c,60,394,902,394,0xFF263446,1);

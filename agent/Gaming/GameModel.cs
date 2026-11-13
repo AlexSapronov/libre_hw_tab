@@ -41,12 +41,16 @@ internal sealed class PresentCsv
 internal sealed class FrameHistory
 {
     private readonly Dictionary<(int,string),List<(FrameSample Frame,DateTimeOffset Received)>> buffers=new();
+    private DateTimeOffset nextPrune;
     internal void Add(FrameSample frame,DateTimeOffset now)
     {
-        foreach(var key in buffers.Where(k=>now-k.Value[^1].Received>TimeSpan.FromSeconds(12)).Select(k=>k.Key).ToArray()) buffers.Remove(key);
+        if(now>=nextPrune) {
+            foreach(var key in buffers.Where(k=>now-k.Value[^1].Received>TimeSpan.FromSeconds(12)).Select(k=>k.Key).ToArray()) buffers.Remove(key);
+            nextPrune=now.AddSeconds(5);
+        }
         var key2=(frame.Pid,frame.Chain);
         if(!buffers.TryGetValue(key2,out var list)) {
-            if(buffers.Count>=32) return;
+            if(buffers.Count>=32) buffers.Remove(buffers.MinBy(k=>k.Value[^1].Received).Key);
             buffers[key2]=list=new();
         }
         if(list.Count>0 && !list[^1].Frame.Application.Equals(frame.Application,StringComparison.OrdinalIgnoreCase)) list.Clear();

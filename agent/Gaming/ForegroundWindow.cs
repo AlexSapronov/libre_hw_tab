@@ -10,7 +10,7 @@ internal static class ForegroundWindow
             var hwnd=GetForegroundWindow(); if(hwnd==IntPtr.Zero) return null;
             GetWindowThreadProcessId(hwnd,out var pid);
             using var process=Process.GetProcessById((int)pid);
-            string path=process.MainModule?.FileName ?? "";
+            string path=""; try {path=process.MainModule?.FileName ?? "";} catch {}
             var title=new StringBuilder(512); GetWindowText(hwnd,title,title.Capacity);
             var info=new MonitorInfo {Size=Marshal.SizeOf<MonitorInfo>()};
             bool full=GetWindowRect(hwnd,out var rect) && GetMonitorInfo(MonitorFromWindow(hwnd,2),ref info)
