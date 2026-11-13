@@ -1,0 +1,69 @@
+name: Build installable apps
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build APK and check Android lint
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-screenshots
+          path: android/app/build/screenshots/*.png
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish self-contained companion
+        run: dotnet publish agent/LibreHwAgent.csproj -c Release -o package/agent
+      - name: Package installer and third-party notices
+        shell: pwsh
+        run: |
+          Copy-Item scripts/* package/
+          Copy-Item THIRD-PARTY-NOTICES.md package/
+          Copy-Item README.md package/
+          Compress-Archive -Path package/* -DestinationPath LibreHwTab-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-companion
+          path: LibreHwTab-Windows-x64.zip
+  preview:
+    if: github.event_name != 'pull_request'
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: builds
+      - name: Publish installable preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp builds/android-apk/app-debug.apk LibreHwTab.apk
+          gh release create "preview-${{ github.run_number }}" LibreHwTab.apk builds/windows-companion/LibreHwTab-Windows-x64.zip --target "${{ github.sha }}" --prerelease --title "Libre HW Tab · Preview ${{ github.run_number }}" --notes "Installable Android debug APK + self-contained Windows x64 companion. Read README for pairing, LAN firewall, and PawnIO sensor driver requirements. Hardware verification is required on your PC and tablet."
