@@ -27,10 +27,11 @@ public class AudioPanelTest {
     @Test public void FaderPreviewsLocallyAndSendsOnceOnReleaseWithOriginalSessionIdentity() throws Exception {
         MediaPanelTest.FeedbackView view=view();render(view,"audio-before-drag");DashboardView.AudioControl chrome=view.audioControls.get("chrome.volume");
         int[] count={0};String[] key={""},id={""},action={""};double[] value={-1};view.onAudio=(k,i,a,v)->{count[0]++;key[0]=k;id[0]=i;action[0]=a;value[0]=v;};
-        float x=chrome.track.centerX(),start=chrome.track.centerY(),quarter=chrome.track.bottom-chrome.track.height()*.25f;
-        touch(view,0,x,start);touch(view,2,x,quarter);assertEquals(0,count[0]);assertEquals(1,view.haptics);render(view,"audio-drag-preview");
+        assertFalse(chrome.vertical);assertTrue(chrome.track.width()>250);
+        float x=chrome.track.centerX(),start=chrome.track.centerY(),quarter=chrome.track.left+chrome.track.width()*.25f;
+        touch(view,0,x,start);touch(view,2,quarter,start);assertEquals(0,count[0]);assertEquals(1,view.haptics);render(view,"audio-drag-preview");
         JSONObject changed=DemoData.sample();changed.getJSONObject("audio").getJSONArray("buses").getJSONObject(0).put("id","new-session");view.accept(changed,"",true);render(view,"audio-session-changed");
-        touch(view,1,x,quarter);assertEquals(1,count[0]);assertEquals("chrome",key[0]);assertEquals("volume",action[0]);assertEquals("demo-chrome",id[0]);assertEquals(.25,value[0],.001);
+        touch(view,1,quarter,start);assertEquals(1,count[0]);assertEquals("chrome",key[0]);assertEquals("volume",action[0]);assertEquals("demo-chrome",id[0]);assertEquals(.25,value[0],.001);
         chrome=view.audioControls.get("chrome.volume");touch(view,0,chrome.track.centerX(),chrome.track.centerY());touch(view,3,chrome.track.centerX(),chrome.track.centerY());assertEquals(1,count[0]);
     }
     @Test public void MicrophoneUsesConfirmedStateAndUnavailableAppsAreNotClickable() throws Exception {

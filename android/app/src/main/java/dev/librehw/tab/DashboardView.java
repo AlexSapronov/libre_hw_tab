@@ -63,36 +63,37 @@ public class DashboardView extends View {
         if(!compact&&micAvailable)fit(c,"ВСЕ ВХОДЫ WINDOWS · "+mic.optInt("devices")+(audioCommandPending&&pendingAudioKey.equals("microphone")?" · КОМАНДА…":""),microphone.left+10,microphone.bottom-8,9,microphone.width()-20,muted);
         registerAudio("microphone",mic==null?"":mic.optString("id"),"mute",microphone,microphone,micAvailable,micMuted,false);
         JSONArray buses=state==null?null:state.optJSONArray("buses");String[] keys={"chrome","game","discord"},names={"CHROME","ИГРА","DISCORD"};
-        float cw=(w-pad*2)/3;
+        float rowsTop=microphone.bottom+12,rowHeight=(h-pad-rowsTop)/3;
         for(int i=0;i<3;i++) {
             JSONObject bus=null;if(buses!=null)for(int n=0;n<buses.length();n++){JSONObject item=buses.optJSONObject(n);if(item!=null&&keys[i].equals(item.optString("key"))){bus=item;break;}}
             String key=keys[i],id=bus==null?"":bus.optString("id");boolean available=ready&&bus!=null&&bus.optBoolean("available"),isMuted=bus!=null&&bus.optBoolean("muted");
             double volume=bus==null?0:bus.optDouble("volume",0);
             if(audioDrag!=null&&audioDrag.key.equals(key)&&Double.isFinite(audioPreview))volume=audioPreview;
             else if(audioCommandPending&&pendingAudioKey.equals(key)&&Double.isFinite(pendingAudioVolume))volume=pendingAudioVolume;
-            volume=Math.max(0,Math.min(1,volume));
-            float x=pad+i*cw,cx=x+cw/2;int color=!available?muted:isMuted?secondary:accent;
-            float labelY=compact?microphone.bottom+11:microphone.bottom+24;
-            centerFit(c,names[i],cx,labelY,compact?9:12,cw-8,color);
+            volume=Math.max(0,Math.min(1,volume));int color=!available?muted:isMuted?secondary:accent;
+            float top=rowsTop+i*rowHeight;String reading=available?Math.round(volume*100)+"%"+(bus.optBoolean("mixed")?"*":""):"—";
             RectF track,hit;
-            if(compact) {
-                float y=h-21;track=new RectF(x+8,y,x+cw-8,y);
-                hit=new RectF(x+3,microphone.bottom+3,x+cw-3,h-2);
-                line(c,track.left,y,track.right,y,0xFF3D4555,4);if(available)line(c,track.left,y,track.left+(float)volume*track.width(),y,color,4);
-                if(available){p.setColor(color);c.drawCircle(track.left+(float)volume*track.width(),y,4,p);}
-                centerFit(c,available?Math.round(volume*100)+"%":"—",cx,h-6,10,cw-8,available?white:muted);
+            if(rowHeight<36) {
+                float labelWidth=bounded(w*.25f,36,66),y=top+rowHeight*.53f;
+                fit(c,names[i],pad,y+3,9,labelWidth,color);
+                track=new RectF(pad+labelWidth+7,y,w-pad-34,y);
+                p.setTextAlign(Paint.Align.RIGHT);fit(c,reading,w-pad,y+3,9,31,available?white:muted);p.setTextAlign(Paint.Align.LEFT);
+                hit=new RectF(track.left-3,top,track.right+3,top+rowHeight);
             }else {
-                float top=labelY+20,bottom=Math.max(top+12,h-pad-64);track=new RectF(cx,top,cx,bottom);hit=new RectF(x+8,top-9,x+cw-8,bottom+10);
-                line(c,cx,top,cx,bottom,0xFF3D4555,7);
-                for(int tick=0;tick<=4;tick++){float y=top+(bottom-top)*tick/4;line(c,cx-19,y,cx-12,y,0xFF56313B,1);line(c,cx+12,y,cx+19,y,0xFF56313B,1);}
-                if(available){float y=bottom-(float)volume*(bottom-top);line(c,cx,y,cx,bottom,color,7);box(c,cx-13,y-5,26,10,white);}
-                centerFit(c,available?Math.round(volume*100)+"%"+(bus.optBoolean("mixed")?"*":""):"НЕТ СЕАНСА",cx,h-pad-40,available?16:9,cw-8,available?white:muted);
-                RectF mute=new RectF(x+8,h-pad-29,x+cw-8,h-pad+3);
+                float y=top+rowHeight*.53f,muteWidth=bounded(w*.15f,48,64),right=w-pad-muteWidth-18;
+                fit(c,names[i],pad,top+12,12,right-pad-62,color);
+                p.setTextAlign(Paint.Align.RIGHT);fit(c,reading,right,top+12,14,60,available?white:muted);p.setTextAlign(Paint.Align.LEFT);
+                track=new RectF(pad+4,y,right,y);
+                float hitHeight=Math.min(50,rowHeight*.66f);hit=new RectF(pad,Math.max(top+16,y-hitHeight/2),right+8,Math.min(top+rowHeight-2,y+hitHeight/2));
+                float bh=bounded(rowHeight*.54f,26,38);RectF mute=new RectF(w-pad-muteWidth,y-bh/2,w-pad,y+bh/2);
                 box(c,mute.left,mute.top,mute.width(),mute.height(),available?0xFF263446:0xFF152131);
-                centerFit(c,isMuted?"MUTED":"MUTE",mute.centerX(),mute.centerY()+4,10,mute.width()-10,color);
+                centerFit(c,isMuted?"MUTED":"MUTE",mute.centerX(),mute.centerY()+4,10,mute.width()-8,color);
                 registerAudio(key,id,"mute",mute,mute,available,isMuted,false);
+                if(i<2)line(c,pad,top+rowHeight-3,w-pad,top+rowHeight-3,0xFF38222A,1);
             }
-            registerAudio(key,id,"volume",hit,track,available,isMuted,!compact);
+            line(c,track.left,track.top,track.right,track.top,0xFF3D4555,rowHeight<36?4:7);
+            if(available){float x=track.left+(float)volume*track.width();line(c,track.left,track.top,x,track.top,color,rowHeight<36?4:7);p.setColor(white);c.drawCircle(x,track.top,rowHeight<36?3:7,p);}
+            registerAudio(key,id,"volume",hit,track,available,isMuted,false);
         }
         if(audioCommandPending){float x=pad+(animations?(android.os.SystemClock.elapsedRealtime()%1000)/1000f*(w-pad*2-30):0);line(c,x,h-3,x+30,h-3,accent,2);if(animations)postInvalidateOnAnimation();}
     }
