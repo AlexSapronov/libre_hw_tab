@@ -177,7 +177,7 @@ public class DashboardView extends View {
         cardTitle(c,w<350?"01 / GAME":"01 / GAME TELEMETRY",w,h);
         if(h>=155)fit(c,game==null?"Ожидание игры":game.isNull("name")?"Ожидание игры":game.optString("name"),pad,h<220?50:60,h<240?20:25,w-pad*2,white);
         if(h<155) {
-            if(layout.metric("fps"))fit(c,number(value(game,"fps"))+" FPS",pad,pad+49,32,w-pad*2,white);
+            if(layout.metric("fps"))fit(c,number(value(game,"fps"))+" FPS",pad,Math.min(pad+49,h*.57f),h<110?24:32,w-pad*2,white);
             String[] smallKeys={"low1","low01","frameTime"},smallLabels={"1% LOW","0,1% LOW","мс"};
             int count=0;for(String key:smallKeys)if(layout.metric(key))count++;
             int column=0;float cw=(w-pad*2)/Math.max(1,count);
@@ -241,7 +241,7 @@ public class DashboardView extends View {
         JSONObject game=object("game");JSONArray frames=game==null?null:game.optJSONArray("frameSeries");
         float limit=33.4f;if(frames!=null)for(int i=0;i<frames.length();i++){double v=frames.optDouble(i);if(Double.isFinite(v)&&v>0)limit=Math.max(limit,(float)v);}
         limit=(float)Math.ceil(limit/8.333f)*8.333f;
-        RectF plot=new RectF(pad,pad+28,w-pad-25,h-pad-15);if(plot.height()<20)return;
+        RectF plot=new RectF(pad,pad+28,w-pad-25,h-pad-15);if(plot.height()<20){fit(c,decimal(value(game,"frameTime"))+" мс",pad,h-pad,24,w-pad*2,white);return;}
         chartGrid(c,plot,limit,false);
         if(nerv)for(float budget:new float[]{4.167f,8.333f,16.667f})if(budget<limit){float y=plot.bottom-plot.height()*budget/limit;line(c,plot.left,y,plot.right,y,0xFF824354,1);if(plot.height()>100)text(c,Math.round(1000/budget)+" FPS",plot.left+4,y-3,8,secondary,medium);}
         if(frames==null || frames.length()<2)fit(c,"Ожидание кадров…",plot.left+5,plot.centerY(),12,plot.width()-10,muted);
@@ -293,7 +293,7 @@ public class DashboardView extends View {
     }
     private void gameHardware(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,"02 / HARDWARE",w,h);
-        boolean columns=w>=420;float top=pad+31,gap=16,sectionH=columns?h-top-pad:(h-top-pad-gap)/2,sectionW=columns?(w-pad*2-gap)/2:w-pad*2;
+        boolean columns=w>=420;float top=pad+(h<150?22:31),gap=h<150?6:16,sectionH=columns?h-top-pad:(h-top-pad-gap)/2,sectionW=columns?(w-pad*2-gap)/2:w-pad*2;
         hardwareSection(c,new RectF(pad,top,pad+sectionW,top+sectionH),"GPU",object("gpu"),secondary,1);
         RectF second=columns?new RectF(pad+sectionW+gap,top,w-pad,h-pad):new RectF(pad,top+sectionH+gap,w-pad,h-pad);
         if(!columns)line(c,pad,second.top-gap/2,w-pad,second.top-gap/2,0xFF56313B,1);
@@ -305,7 +305,7 @@ public class DashboardView extends View {
         if(r.height()>=65)text(c,title,r.left,r.top+12,12,color,medium);
         if(compact) {
             String values=(layout.metric("temperature")?number(temperature)+"°C":"")+(layout.metric("temperature")&&layout.metric("load")?" / ":"")+(layout.metric("load")?number(load)+"%":"");
-            if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-2),14,r.width(),color);return;}
+            if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-2),bounded(r.height()*.65f,9,14),r.width(),color);return;}
             fit(c,values,r.left,r.top+40,24,r.width(),white);
             if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
@@ -382,7 +382,7 @@ public class DashboardView extends View {
         boolean wide=w>=400 && h>=160;float mainW=wide?w*.40f:w-pad*2,body=pad+24;
         float size=bounded(Math.min(mainW*.30f,h*.24f),24,64);
         fit(c,number(load)+"%",pad,body+size,size,mainW,color);
-        fit(c,decimal(used)+" / "+number(total)+" GB",pad,body+size+19,Math.min(18,w*.06f),mainW,muted);
+        fit(c,decimal(used)+" / "+number(total)+" GB",pad,Math.min(body+size+19,h-pad),Math.min(18,w*.06f),mainW,muted);
         float barY=body+size+30;
         if(barY+14<h-pad){if(nerv)nervSegments(c,pad,barY,mainW,18,load,color,24);else for(int i=0;i<24;i++)box(c,pad+i*mainW/24,barY,mainW/24-2,18,Float.isFinite(load)&&i<Math.ceil(load/100*24)?color:0xFF263446);}
         RectF spark=wide?new RectF(w*.47f,body+10,w-pad,h-pad-16):new RectF(pad,barY+25,w-pad,h-pad-12);
@@ -399,7 +399,7 @@ public class DashboardView extends View {
     }
     private void graph(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,nerv?"MAGI // RESOURCE LOAD":"THERMAL HISTORY",w,h);
-        RectF plot=new RectF(pad,pad+30,w-pad-30,h-pad-15);if(plot.height()<20)return;
+        RectF plot=new RectF(pad,pad+30,w-pad-30,h-pad-15);if(plot.height()<20){fit(c,"CPU "+number(value(object("cpu"),nerv?"load":"temperature"))+(nerv?"%":"°C")+" / GPU "+number(value(object("gpu"),nerv?"load":"temperature"))+(nerv?"%":"°C"),pad,h-pad,14,w-pad*2,white);return;}
         chartGrid(c,plot,100,nerv);
         for(int series=0;series<2;series++) {
             Path path=new Path();boolean started=false;float lastY=0;long now=android.os.SystemClock.elapsedRealtime();
