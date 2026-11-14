@@ -302,7 +302,7 @@ public final class DashboardView extends View {
     private void hardwareSection(Canvas c,RectF r,String title,JSONObject data,int color,int series) {
         boolean compact=r.height()<150;float temperature=value(data,"temperature"),load=value(data,"load");
         float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.28f),24,68);
-        text(c,title,r.left,r.top+12,12,color,medium);
+        if(r.height()>=65)text(c,title,r.left,r.top+12,12,color,medium);
         if(compact) {
             String values=(layout.metric("temperature")?number(temperature)+"°C":"")+(layout.metric("temperature")&&layout.metric("load")?" / ":"")+(layout.metric("load")?number(load)+"%":"");
             if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-2),14,r.width(),color);return;}

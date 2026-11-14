@@ -44,6 +44,9 @@ public class ResponsiveCardsTest {
             view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);
             render(view,"reflow-media-"+key+"-"+n).recycle();assertEquals(saved,view.layout.json());ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);
         }
+        view.layout=new DashboardLayout();view.mode=1;
+        for(String key:DashboardLayout.OVERVIEW)if(!key.equals("side"))view.layout.hidden.add(DashboardLayout.id(key,false));
+        view.layout.positions.put("overview.side",new RectF(36,125,196,235));render(view,"reflow-cooling-minimum").recycle();
         view.layout=new DashboardLayout();view.mode=2;render(view,"reflow-game-full").recycle();
         view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);render(view,"reflow-game-media").recycle();
         view.mode=1;render(view,"reflow-overview-media").recycle();ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);render(view,"reflow-overview-full").recycle();
