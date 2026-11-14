@@ -42,11 +42,11 @@ public class ResponsiveCardsTest {
             assertTrue(view.layout.valid(game));String saved=view.layout.json();
             render(view,"reflow-"+key+"-"+n).recycle();
             view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);
-            render(view,"reflow-media-"+key+"-"+n).recycle();assertEquals(saved,view.layout.json());view.accept(DemoData.sample(),"",true);
+            render(view,"reflow-media-"+key+"-"+n).recycle();assertEquals(saved,view.layout.json());ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);
         }
         view.layout=new DashboardLayout();view.mode=2;render(view,"reflow-game-full").recycle();
         view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);render(view,"reflow-game-media").recycle();
-        view.mode=1;render(view,"reflow-overview-media").recycle();view.accept(DemoData.sample(),"",true);render(view,"reflow-overview-full").recycle();
+        view.mode=1;render(view,"reflow-overview-media").recycle();ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);render(view,"reflow-overview-full").recycle();
     }
     private Bitmap render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));

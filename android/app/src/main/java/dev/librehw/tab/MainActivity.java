@@ -132,7 +132,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         }});
     }
     private void updateThumbnail(JSONObject sample,int current) {
-        JSONObject media=sample==null?null:sample.optJSONObject("media");String id=media==null?"":media.optString("id");
+        JSONObject media=dashboard.media();String id=media==null?"":media.optString("id");
         if(!id.equals(thumbnailId)){thumbnailId=id;dashboard.mediaThumbnail=null;thumbnailRetry=0;}
         if(media==null||!media.optBoolean("hasThumbnail")||dashboard.mediaThumbnail!=null||thumbnailBusy||demo||android.os.SystemClock.elapsedRealtime()<thumbnailRetry)return;
         thumbnailBusy=true;thumbnailRetry=android.os.SystemClock.elapsedRealtime()+10000;
@@ -147,11 +147,11 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         JSONObject media=dashboard.media();if(media==null||mediaBusy||demo)return;
         String id=media.optString("id"),pc=address,key=token;
         double position=Math.max(0,Math.min(1,fraction))*media.optDouble("duration",0);
-        mediaBusy=true;
+        mediaBusy=true;dashboard.mediaCommandPending=true;dashboard.invalidate();
         mediaWorker.submit(()->{
             String failure=null;try{MediaClient.control(pc,key,id,action,position);}catch(Exception ex){failure=ex.getMessage();}
             final String message=failure;
-            ui.post(()->{mediaBusy=false;if(active&&message!=null)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();});
+            ui.post(()->{mediaBusy=false;dashboard.mediaCommandPending=false;dashboard.invalidate();if(active&&message!=null)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();});
         });
     }
     private EditText field(LinearLayout layout, String hint, String value, boolean secret) {

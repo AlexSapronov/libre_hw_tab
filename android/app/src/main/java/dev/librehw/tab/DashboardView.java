@@ -28,9 +28,16 @@ public final class DashboardView extends View {
     public Bitmap mediaThumbnail;
     public interface MediaAction { void run(String action,double fraction); }
     public MediaAction onMedia=(action,fraction)->{};
-    private long mediaReceived;
+    private long mediaReceived,lastMediaSeen;
+    private JSONObject displayMedia;
+    private boolean mediaTransition;
+    private double transitionPosition;
+    public boolean mediaCommandPending;
+    private RectF pressedRect;
+    private boolean fingerDown,touchStarted;
+    private long releasedAt;
     private final RectF mediaPrevious=new RectF(877,605,957,685),mediaToggle=new RectF(973,605,1053,685),mediaNext=new RectF(1069,605,1149,685),mediaSeek=new RectF(204,657,840,691);
-    public JSONObject media(){return object("media");}
+    public JSONObject media(){return displayMedia;}
     boolean mediaVisible(){return !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
     public long wakeSentUntil;
     public String weatherCity="Санкт-Петербург";
@@ -65,10 +72,16 @@ public final class DashboardView extends View {
         setContentDescription("Панель мониторинга ПК. Настройки и тема расположены вверху справа.");
         setFocusable(true);
     }
-    public void clear() { history.clear();fpsHistory.clear();fpsSource=""; sample = null; error = "Подключение…"; invalidate(); }
+    public void clear() { history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null; sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data;mediaReceived=android.os.SystemClock.elapsedRealtime(); if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
+        sample = data; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
+        JSONObject incoming=data==null?null:data.optJSONObject("media");
+        if(incoming!=null) {displayMedia=incoming;mediaReceived=now;lastMediaSeen=now;mediaTransition=false;}
+        else if(data!=null && displayMedia!=null && displayMedia.optBoolean("playing") && now-lastMediaSeen<5000) {
+            if(!mediaTransition)transitionPosition=displayMedia.optDouble("position",0)+(now-mediaReceived)/1000.0;
+            mediaTransition=true;
+        }else {displayMedia=null;mediaTransition=false;}
         history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature"),value(object("cpu"),"load"),value(object("gpu"),"load"),value(object("memory"),"load")));
         JSONObject game=object("game");String source=game==null?"":game.optString("sourceId",game.optString("name",""));
         if(!source.equals(fpsSource)){fpsHistory.clear();fpsSource=source;}
@@ -116,7 +129,7 @@ public final class DashboardView extends View {
         c.save(); c.translate(offsetX, offsetY); c.scale(scale, scale);
         p.setShader(new RadialGradient(300, 100, 750, palette.glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,1200,760,p); p.setShader(null);
-        if(standby()){drawStandby(c);finishAnimation(c,"standby");c.restore();postInvalidateDelayed(1000);return;}
+        if(standby()){drawStandby(c);finishAnimation(c,"standby");drawInteraction(c);c.restore();postInvalidateDelayed(1000);return;}
         text(c, nerv?"NERV":"LIBRE", 36, 53, 29, white, medium); text(c, "H W   T A B", 144, 52, 16, accent, medium);
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         text(c, time, 700, 53, 27, white, digits);
@@ -144,10 +157,11 @@ public final class DashboardView extends View {
         JSONObject game = object("game");
         if(sample!=null && !sample.isNull("sensorError"))fit(c,"Ошибка чтения датчиков — проверь агент",36,727,12,1128,0xFFFF7777);
         else if(game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
+        drawInteraction(c);
         c.restore();
     }
     private void button(Canvas c, RectF r, String label) {
-        box(c, r.left, r.top+7, r.width(), 40, 0xFF152131);
+        box(c, r.left, r.top+7, r.width(), 40, fingerDown&&r.equals(pressedRect)?0xFF324557:0xFF152131);
         text(c, label, r.left+14, r.top+33, 12, muted, medium);
     }
     private static float bounded(float value,float min,float max){return Math.max(min,Math.min(max,value));}
@@ -427,20 +441,22 @@ public final class DashboardView extends View {
         }else {box(c,52,605,135,84,0xFF152131);text(c,"CHROME",67,653,17,accent,medium);}
         c.save();c.clipRect(204,598,845,651);
         fit(c,media.optString("title","Видео"),204,621,18,630,white);
-        fit(c,"CHROME / "+media.optString("artist","")+(media.optBoolean("playing")?"":" · ПАУЗА"),204,645,12,630,muted);c.restore();
+        fit(c,"CHROME / "+media.optString("artist","")+(mediaTransition?" · СМЕНА ТРЕКА…":mediaCommandPending?" · КОМАНДА…":media.optBoolean("playing")?"":" · ПАУЗА"),204,645,12,630,muted);c.restore();
         double duration=media.optDouble("duration",0),position=media.optDouble("position",0);
-        if(media.optBoolean("playing"))position+=(android.os.SystemClock.elapsedRealtime()-mediaReceived)/1000.0;
+        if(mediaTransition)position=transitionPosition;
+        else if(media.optBoolean("playing"))position+=(android.os.SystemClock.elapsedRealtime()-mediaReceived)/1000.0;
         if(duration>0)position=Math.min(position,duration);
         line(c,204,673,840,673,0xFF263446,5);
         if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);c.drawCircle(x,673,4,p);}
         text(c,mediaTime(position)+" / "+(duration>0?mediaTime(duration):"LIVE"),204,694,9,muted,regular);
-        mediaButton(c,mediaPrevious,"|◀",media.optBoolean("canPrevious"));
-        mediaButton(c,mediaToggle,media.optBoolean("playing")?"Ⅱ":"▶",media.optBoolean("canToggle"));
-        mediaButton(c,mediaNext,"▶|",media.optBoolean("canNext"));
+        mediaButton(c,mediaPrevious,"|◀",media.optBoolean("canPrevious")&&!mediaTransition&&!mediaCommandPending);
+        mediaButton(c,mediaToggle,media.optBoolean("playing")?"Ⅱ":"▶",media.optBoolean("canToggle")&&!mediaTransition&&!mediaCommandPending);
+        mediaButton(c,mediaNext,"▶|",media.optBoolean("canNext")&&!mediaTransition&&!mediaCommandPending);
     }
     private void mediaButton(Canvas c,RectF rect,String title,boolean enabled) {
-        box(c,rect.left,rect.top,rect.width(),rect.height(),enabled?0xFF263446:0xFF152131);
-        p.setTextAlign(Paint.Align.CENTER);text(c,title,rect.centerX(),rect.centerY()+10,29,enabled?accent:muted,medium);p.setTextAlign(Paint.Align.LEFT);
+        boolean pressed=fingerDown&&rect.equals(pressedRect);
+        box(c,rect.left+(pressed?2:0),rect.top+(pressed?2:0),rect.width()-(pressed?4:0),rect.height()-(pressed?4:0),pressed?0xFF40536A:enabled?0xFF263446:0xFF152131);
+        p.setTextAlign(Paint.Align.CENTER);text(c,title,rect.centerX(),rect.centerY()+(pressed?12:10),29,enabled?accent:muted,medium);p.setTextAlign(Paint.Align.LEFT);
     }
     static String mediaTime(double seconds){int time=(int)Math.max(0,seconds);return time>=3600?String.format(Locale.US,"%d:%02d:%02d",time/3600,time/60%60,time%60):String.format(Locale.US,"%d:%02d",time/60,time%60);}
     private void drawBlock(Canvas c,String key,boolean game) {
@@ -537,8 +553,43 @@ public final class DashboardView extends View {
             text(c,(Float.isNaN(precipitation)?"—":decimal(precipitation))+" мм/"+(slot.optInt("precipitationHours",1)==3?"3ч":"ч"),x+9,507,11,muted,regular);
         }
     }
+    private RectF controlAt(float x,float y) {
+        if(editing){for(RectF r:new RectF[]{themeHit,settingsHit,new RectF(655,20,820,86)})if(r.contains(x,y))return r;return null;}
+        if(standby()){for(RectF r:new RectF[]{clockBack,settingsHit,clockWake,clockAlarm,clockWeather})if(r.contains(x,y))return r;return null;}
+        if(mediaVisible() && !mediaTransition && !mediaCommandPending) {
+            JSONObject m=media();
+            if(mediaPrevious.contains(x,y)&&m.optBoolean("canPrevious"))return mediaPrevious;
+            if(mediaToggle.contains(x,y)&&m.optBoolean("canToggle"))return mediaToggle;
+            if(mediaNext.contains(x,y)&&m.optBoolean("canNext"))return mediaNext;
+            if(mediaSeek.contains(x,y)&&m.optBoolean("canSeek"))return mediaSeek;
+        }
+        for(RectF r:new RectF[]{menuHit,modeHit,themeHit,settingsHit})if(r.contains(x,y))return r;return null;
+    }
+    private void drawInteraction(Canvas c) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(pressedRect!=null) {
+            float fade=fingerDown?1:Math.max(0,1-(now-releasedAt)/(animations?220f:90f));
+            if(fade>0){RectF rect=new RectF(pressedRect);if(rect.top<100){rect.top+=7;rect.bottom=rect.top+40;}
+                box(c,rect.left+2,rect.top+2,rect.width()-4,rect.height()-4,((int)(fade*48)<<24)|(accent&0xffffff));
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(((int)(fade*220)<<24)|(accent&0xffffff));c.drawRect(rect.left+2,rect.top+2,rect.right-2,rect.bottom-2,p);p.setStyle(Paint.Style.FILL);
+                if(!fingerDown)postInvalidateOnAnimation();
+            }else pressedRect=null;
+        }
+        if(mediaCommandPending && mediaVisible()) {
+            float x=877+(animations?(now%1000)/1000f*230:0);line(c,x,699,Math.min(1149,x+40),699,accent,3);
+            if(animations)postInvalidateOnAnimation();
+        }
+    }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
+        if(event.getAction()==MotionEvent.ACTION_DOWN){touchStarted=true;pressedRect=controlAt(x,y);fingerDown=pressedRect!=null;if(fingerDown)performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);invalidate();}
+        if(event.getAction()==MotionEvent.ACTION_CANCEL){fingerDown=false;touchStarted=false;pressedRect=null;invalidate();return true;}
+        if(event.getAction()==MotionEvent.ACTION_MOVE && fingerDown && !pressedRect.contains(x,y)){fingerDown=false;pressedRect=null;invalidate();}
+        if(event.getAction()==MotionEvent.ACTION_UP){
+            boolean cancelled=touchStarted && (pressedRect==null || !pressedRect.contains(x,y));
+            fingerDown=false;touchStarted=false;releasedAt=android.os.SystemClock.elapsedRealtime();invalidate();
+            if(cancelled && !editing)return true;
+        }
         if(editing) {
             if(event.getAction()==MotionEvent.ACTION_DOWN) {
                 selection=null;
@@ -558,6 +609,7 @@ public final class DashboardView extends View {
             performClick();
             if(mediaVisible() && new RectF(36,589,1164,704).contains(x,y)) {
                 JSONObject media=media();
+                if(mediaTransition || mediaCommandPending)return true;
                 if(mediaPrevious.contains(x,y)&&media.optBoolean("canPrevious"))onMedia.run("previous",0);
                 else if(mediaToggle.contains(x,y)&&media.optBoolean("canToggle"))onMedia.run("toggle",0);
                 else if(mediaNext.contains(x,y)&&media.optBoolean("canNext"))onMedia.run("next",0);
