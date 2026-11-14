@@ -59,6 +59,7 @@ final class DashboardLayout {
                     RectF old=new RectF(944,125,1164,690);
                     JSONArray a=items==null?null:items.optJSONArray(id("side",game));
                     if(a!=null && a.length()==4)old=new RectF((float)a.getDouble(0),(float)a.getDouble(1),(float)a.getDouble(2),(float)a.getDouble(3));
+                    if(!Float.isFinite(old.left)||!Float.isFinite(old.top)||!Float.isFinite(old.right)||!Float.isFinite(old.bottom))return new DashboardLayout();
                     String first=game?"gpu":"side",second=game?"cpu":"network";
                     boolean wasHidden=result.hidden.contains(id("side",game));
                     RectF one=new RectF(old),two=new RectF(old);

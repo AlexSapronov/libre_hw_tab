@@ -450,10 +450,10 @@ public class DashboardView extends View {
         float pad=padding(w,h);cardTitle(c,"06 / NETWORK",w,h);
         JSONObject n=object("network");boolean ready=n!=null&&n.optString("status").equals("ready");
         String state=n==null?sample==null?"НЕТ СВЯЗИ С ПК":"ОБНОВИ АГЕНТ ПК":ready?n.optString("name","СЕТЬ ПК"):n.optString("status").equals("warming")?"ИЗМЕРЕНИЕ…":"СЕТЬ НЕДОСТУПНА";
-        fit(c,state,pad,pad+33,10,w-pad*2,muted);
+        if(h>=120)fit(c,state,pad,pad+33,10,w-pad*2,muted);
         if(h<155){
-            fit(c,"DOWN  "+traffic(ready?value(n,"downloadBps"):Double.NaN)+" Мбит/с",pad,pad+57,12,w-pad*2,accent);
-            fit(c,"UP    "+traffic(ready?value(n,"uploadBps"):Double.NaN)+" Мбит/с",pad,pad+78,12,w-pad*2,secondary);return;
+            fit(c,"DOWN  "+traffic(ready?value(n,"downloadBps"):Double.NaN)+" Мбит/с",pad,pad+(h<120?36:57),12,w-pad*2,accent);
+            fit(c,"UP    "+traffic(ready?value(n,"uploadBps"):Double.NaN)+" Мбит/с",pad,pad+(h<120?60:78),12,w-pad*2,secondary);return;
         }
         float top=pad+44,row=(h-pad-top-14)/2;
         String[] fields={"downloadBps","uploadBps"},labels={"DOWNLOAD","UPLOAD"};
