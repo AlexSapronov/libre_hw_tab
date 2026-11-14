@@ -225,14 +225,17 @@ public class DashboardView extends View {
         if(nerv && detailLevel>0)drawTerminalFrame(c,palette);
         if(standby()){drawStandby(c);finishAnimation(c,"standby");drawStatus(c);drawInteraction(c);c.restore();postInvalidateDelayed(1000);return;}
         text(c, nerv?"NERV":"LIBRE", 36, 53, 29, nerv?accent:white, medium); text(c, nerv?"MAGI / "+(palette.name.equals("NERV")?"SYS":palette.name.substring(4)):"H W   T A B", 144, 52, nerv?13:16, accent, medium);
-        String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-        text(c, time, 700, 53, 27, white, digits);
         boolean playing=playing();
         if(nerv && detailLevel>0 && palette.name.startsWith("EVA-"))
             fit(c,palette.unitDescription(),36,80,9,250,secondary);
-        button(c,menuHit,"МЕНЮ");
-        button(c, modeHit, mode==0 ? (playing ? "AUTO / ИГРА" : "AUTO / ОБЗОР") : mode==1 ? "РЕЖИМ / ОБЗОР" : "РЕЖИМ / ИГРА");
-        button(c, themeHit, "THEME / "+palette.name); button(c, settingsHit, "ПОДКЛЮЧЕНИЕ");
+        if(editing)drawEditorHeader(c,playing);
+        else {
+            String time=java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            text(c,time,700,53,27,white,digits);
+            button(c,menuHit,"МЕНЮ");
+            button(c,modeHit,mode==0?(playing?"AUTO / ИГРА":"AUTO / ОБЗОР"):mode==1?"РЕЖИМ / ОБЗОР":"РЕЖИМ / ИГРА");
+            button(c,themeHit,"THEME / "+palette.name);button(c,settingsHit,"ПОДКЛЮЧЕНИЕ");
+        }
         boolean healthy = sample != null && sample.isNull("sensorError");
         int status = sample == null ? ALERT : healthy ? accent : ALERT;
         p.setColor(status); circle(c,43, 93, 4, p);
@@ -252,8 +255,8 @@ public class DashboardView extends View {
         if(editing)drawEditor(c,playing);
         finishAnimation(c,(playing?"game":"overview")+themeId);
         JSONObject game = object("game");
-        if(sample!=null && !sample.isNull("sensorError"))fit(c,"Ошибка чтения датчиков — проверь агент",36,727,12,1128,ALERT);
-        else if(game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
+        if(!editing && sample!=null && !sample.isNull("sensorError"))fit(c,"Ошибка чтения датчиков — проверь агент",36,727,12,1128,ALERT);
+        else if(!editing && game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
         if(!editing)drawStatus(c);
         drawInteraction(c);
         c.restore();
@@ -628,10 +631,12 @@ public class DashboardView extends View {
         }
         localCoordinates=false;c.restore();
     }
-    private void drawEditor(Canvas c,boolean game) {
+    private void drawEditorHeader(Canvas c,boolean game) {
         button(c,modeHit,"РЕДАКТОР / "+(game?"ИГРА":"ОБЗОР"));
         button(c,new RectF(655,20,820,86),"БЛОКИ / ДАННЫЕ");
         button(c,themeHit,"СОХРАНИТЬ");button(c,settingsHit,"ОТМЕНА");
+    }
+    private void drawEditor(Canvas c,boolean game) {
         for(Map.Entry<String,RectF> entry:drawnCards.entrySet()) {
             RectF r=entry.getValue();p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(entry.getKey().equals(selection)?3:1);
             p.setColor(layout.valid(game)?accent:ALERT);c.drawRect(r,p);p.setStyle(Paint.Style.FILL);
