@@ -44,7 +44,7 @@ public class AudioPanelTest {
     @Test public void OldGameLayoutMigratesWithoutResettingOverviewOrHiddenMetrics() throws Exception {
         DashboardLayout migrated=DashboardLayout.parse("{version:1,positions:{'overview.cpu':[36,125,300,400],'game.main':[36,125,926,425],'game.memory':[36,443,306,690]},disabled:['power']}");
         assertEquals(264,migrated.rect("cpu",false).width(),0);assertFalse(migrated.metric("power"));assertTrue(migrated.valid(true));assertEquals(436,migrated.rect("main",true).width(),0);assertEquals(493,migrated.rect("memory",true).top,0);
-        assertEquals(2,new JSONObject(migrated.json()).getInt("version"));assertEquals(migrated.json(),DashboardLayout.parse(migrated.json()).json());
+        assertEquals(3,new JSONObject(migrated.json()).getInt("version"));assertEquals(migrated.json(),DashboardLayout.parse(migrated.json()).json());
     }
     private void touch(DashboardView view,int action,float x,float y){view.onTouchEvent(MotionEvent.obtain(0,0,action,view.screenX(x),view.screenY(y),0));}
     private void render(DashboardView view,String name) throws Exception {

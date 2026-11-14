@@ -15,6 +15,7 @@ final class DemoData {
         JSONArray buses=new JSONArray();String[] keys={"chrome","game","discord"};double[] levels={.65,.8,1};
         for(int i=0;i<3;i++)buses.put(new JSONObject().put("key",keys[i]).put("id","demo-"+keys[i]).put("available",true).put("volume",levels[i]).put("muted",false).put("mixed",false).put("sessions",1));
         data.put("audio",new JSONObject().put("ready",true).put("microphone",new JSONObject().put("id","demo-mic").put("available",true).put("muted",false).put("mixed",false).put("devices",2)).put("buses",buses));
+        data.put("network",new JSONObject().put("status","ready").put("name","DEMO / Ethernet").put("downloadBps",(32+wave*12)*1000000/8).put("uploadBps",(4+wave)*1000000/8));
         return data;
     }
     private static JSONObject device(String name, double temperature, double load, double clock, double power, double fan, double used, double total) throws JSONException {
