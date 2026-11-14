@@ -194,7 +194,7 @@ public final class DashboardView extends View {
         if(game!=null && game.optBoolean("paused") && h>=200)fit(c,"ALT+TAB / ПАУЗА",pad,h-pad,10,heroWidth,muted);
     }
     private void fpsSignal(Canvas c,RectF area,JSONObject game) {
-        boolean budget=area.width()>=390;float budgetW=budget?108:0;
+        boolean budget=area.width()>=390 && area.height()>=80;float budgetW=budget?108:0;
         float left=area.left,top=area.top+18,right=area.right-budgetW,bottom=area.bottom-4;
         fit(c,"MAGI // FPS SIGNAL · 60 С",left,area.top+8,9,right-left,accent);
         for(int i=0;i<=8;i++){float x=left+(right-left)*i/8;line(c,x,top,x,bottom,0xFF38222A,1);}
@@ -250,8 +250,9 @@ public final class DashboardView extends View {
         float bodyH=Math.max(36,footer-body-10);boolean hasTemp=layout.metric("temperature"),hasLoad=layout.metric("load");boolean columns=hasTemp && hasLoad && (w>=300 || compact);
         float firstW=columns?(w-pad*3)*.61f:w-pad*2,loadX=columns?pad+firstW+pad:pad;
         float tempSize=bounded(Math.min(firstW*.65f,bodyH*.65f),25,84);
+        int thermal=Float.isFinite(value(data,"temperature"))&&value(data,"temperature")>=(series==0?85:83)?0xFFFF7777:color;
         if(layout.metric("temperature")) {
-            valueWithUnit(c,number(value(data,"temperature")),pad,body+tempSize,tempSize,"°C",bounded(tempSize*.30f,12,24),tempSize*.43f,color);
+            valueWithUnit(c,number(value(data,"temperature")),pad,body+tempSize,tempSize,"°C",bounded(tempSize*.30f,12,24),tempSize*.43f,thermal);
             if(bodyH>70)text(c,"ТЕМПЕРАТУРА",pad,body+tempSize+20,10,color,medium);
         }
         if(layout.metric("load")) {
@@ -295,7 +296,7 @@ public final class DashboardView extends View {
             if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
         float baseline=r.top+tempSize+27;
-        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,color);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
+        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,Float.isFinite(temperature)&&temperature>=(series==0?85:83)?0xFFFF7777:color);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
         if(layout.metric("load")) {
             float barY=layout.metric("temperature")?r.top+r.height()*.73f:r.top+65;
             text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
