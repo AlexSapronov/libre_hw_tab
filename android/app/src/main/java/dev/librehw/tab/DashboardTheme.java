@@ -13,6 +13,7 @@ final class DashboardTheme {
         new DashboardTheme("ARCTIC","Arctic — лёд и синий","#6FE3FF","#9DAEFF","#070E16","#0D2130","#30204060"),
         new DashboardTheme("SAKURA","Sakura — розовый и лаванда","#FF91C9","#C9ADFF","#140D16","#241827","#35481D3C"),
         new DashboardTheme("AMBER","Amber — медь и золото","#FFC36A","#FFE6B0","#120E09","#241D14","#35482F14"),
-        new DashboardTheme("CRIMSON","Crimson — красный и ледяной голубой","#FF6D83","#7FDBFF","#130C10","#23151D","#354A1724")
+        new DashboardTheme("CRIMSON","Crimson — красный и ледяной голубой","#FF6D83","#7FDBFF","#130C10","#23151D","#354A1724"),
+        new DashboardTheme("NERV","NERV — MAGI / угловая геометрия","#FF953D","#FF4657","#100B0C","#1E1115","#354D1518")
     };
 }

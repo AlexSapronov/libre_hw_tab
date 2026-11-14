@@ -53,7 +53,7 @@ internal sealed class GamingService : BackgroundService
     private async Task Poll(string rulesPath,CancellationToken stop)
     {
         DateTimeOffset nextRules=DateTimeOffset.MinValue;
-        using var timer=new PeriodicTimer(TimeSpan.FromMilliseconds(200));
+        using var timer=new PeriodicTimer(TimeSpan.FromMilliseconds(500));
         while(!stop.IsCancellationRequested) {
             if(DateTimeOffset.UtcNow>=nextRules) {
                 nextRules=DateTimeOffset.UtcNow.AddSeconds(1);
