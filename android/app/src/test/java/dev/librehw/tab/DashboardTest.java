@@ -61,17 +61,16 @@ public class DashboardTest {
         view.accept(null,"ПК выключен",false); render(view,"offline");
         data.put("cpu",JSONObject.NULL).put("gpu",JSONObject.NULL).put("memory",JSONObject.NULL);
         view.accept(data,"",false); render(view,"missing");
-        float scale=800f/760f, dx=(1340-1200*scale)/2;
-        view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,dx+1080*scale,45*scale,0));
-        view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,dx+900*scale,45*scale,0));
+        view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,view.screenX(1080),view.screenY(45),0));
+        view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,view.screenX(900),view.screenY(45),0));
         assertEquals(1,clicks[0]); assertEquals(1,clicks[1]);
     }
     private void assertLoadCentered(DashboardView view) {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);
         view.draw(new Canvas(bitmap));
-        float scale=800f/760f, dx=(1340-1200*scale)/2;
+        float scale=800f/760f;
         for (float cardX : new float[] {36,490}) {
-            float center=dx+(cardX+342)*scale;
+            float center=view.screenX(cardX+342);
             int min=1340,max=0;
             for (int y=(int)((125+148)*scale);y<(125+205)*scale;y++) {
                 for (int x=(int)(center-65*scale);x<center+65*scale;x++) {

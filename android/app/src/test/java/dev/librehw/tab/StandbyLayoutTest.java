@@ -55,8 +55,8 @@ public class StandbyLayoutTest {
         int[] saved={0};view.onEditorSave=()->saved[0]++;touch(view,1,900,45);assertEquals(1,saved[0]);assertTrue(view.layout.valid(false));
     }
     private void touch(DashboardView view,int action,float x,float y) {
-        float scale=800f/760f,dx=(1340-1200*scale)/2;
-        view.onTouchEvent(android.view.MotionEvent.obtain(0,0,action,dx+x*scale,y*scale,0));
+
+        view.onTouchEvent(android.view.MotionEvent.obtain(0,0,action,view.screenX(x),view.screenY(y),0));
     }
     @Test public void AlarmUsesLocalSystemClockAndCorrectTime() throws Exception {
         try(org.robolectric.android.controller.ActivityController<OfflineActivity> controller=Robolectric.buildActivity(OfflineActivity.class).setup()) {
