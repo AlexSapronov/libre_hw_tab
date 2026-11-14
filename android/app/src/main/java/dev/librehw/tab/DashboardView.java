@@ -31,6 +31,13 @@ public class DashboardView extends View {
     private final Map<String,RectF> focusTargets=new LinkedHashMap<>();
     private boolean localCoordinates;
     private DashboardTheme palette;
+    private String drawingBlock="";
+    private boolean fullMagi(){return nerv && detailLevel==2;}
+    private boolean hot(String key){float t=value(object(key),"temperature");return Float.isFinite(t)&&t>=(key.equals("cpu")?85:83);}
+    String operationalState(){return sample==null?"SIGNAL LOST":!sample.isNull("sensorError")?"SENSOR ERROR":hot("cpu")||hot("gpu")?"THERMAL ALERT":demo?"DEMO":"LIVE";}
+    private int stateColor(){String state=operationalState();return state.equals("LIVE")||state.equals("DEMO")?accent:ALERT;}
+    private int blockColor(){return (drawingBlock.equals("cpu")||drawingBlock.equals("gpu"))&&hot(drawingBlock)?ALERT:accent;}
+    private String channel(){switch(drawingBlock){case "cpu":return "01";case "gpu":return "02";case "memory":return "03";case "history":return "04";case "audio":return "05";case "network":return "06";case "side":return "07";case "main":return "08";default:return "00";}}
     private final RectF focusArea=new RectF(36,125,1164,704);
     public boolean closeFocus(){if(focusedMetric==null)return false;focusedMetric=null;focusGesture=null;invalidate();return true;}
     float aspectRatio(){return (getWidth()/VIEWPORT_WIDTH)/(getHeight()/VIEWPORT_HEIGHT);}
@@ -240,7 +247,8 @@ public class DashboardView extends View {
         int status = sample == null ? ALERT : healthy ? accent : ALERT;
         p.setColor(status); circle(c,43, 93, 4, p);
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "SIGNAL LOST  /  " + error;
-        fit(c, caption, 56, 99, 13, 1090, status);
+        if(fullMagi())drawOperationalBand(c,caption);
+        else fit(c, caption, 56, 99, 13, 1090, status);
         drawnCards.clear();audioControls.clear();
         if(focusedMetric!=null){drawFocus(c);drawStatus(c);c.restore();postInvalidateDelayed(1000);return;}
         if(playing){drawBlock(c,"main",true);drawBlock(c,"audio",true);}
@@ -267,26 +275,33 @@ public class DashboardView extends View {
     private int surface(int fallback,int alpha){return nerv?tint(accent,alpha):fallback;}
     /** Static drafting marks: no extra animation or telemetry state. */
     private void drawTerminalFrame(Canvas c,DashboardTheme palette) {
-        for(int x=36;x<=1164;x+=24)line(c,x,112,x,116,surface(0,70),1);
         line(c,36,112,1164,112,tint(accent,60),1);
-        if(!standby())line(c,36,68,285,68,tint(accent,110),1);
-
+        if(!fullMagi())return;
+        for(int x=36;x<=1164;x+=24)line(c,x,110,x,116,tint(accent,130),1);
+        if(!standby())line(c,36,68,285,68,tint(accent,160),2);
+    }
+    private void drawOperationalBand(Canvas c,String caption){
+        int color=stateColor();
+        p.setColor(tint(color,28));c.drawRect(36,83,1164,108,p);
+        p.setColor(color);c.drawRect(36,83,290,108,p);
+        fit(c,"MAGI / "+operationalState(),44,100,13,238,0xFF100D14);
+        String explanation=operationalState().equals("THERMAL ALERT")?(hot("cpu")?"CPU "+number(value(object("cpu"),"temperature"))+"°C  ":"")+(hot("gpu")?"GPU "+number(value(object("gpu"),"temperature"))+"°C  ":"")+" / "+caption:caption;
+        fit(c,explanation,304,100,11,845,color);
     }
     private void panelFrame(Canvas c,float w,float h) {
         if(!nerv || detailLevel==0)return;
-        line(c,20,1,Math.min(w-20,92),1,accent,3);
-        line(c,w-1,20,w-1,Math.min(h-20,54),secondary,2);
-        line(c,w-64,h-2,w-20,h-2,tint(secondary,150),2);
-        // Fine edge ticks stay outside the card's content padding.
-        if(detailLevel==2)for(int y=40;y<h-20;y+=24)line(c,1,y,4,y,tint(accent,65),1);
-        if(palette.name.startsWith("EVA-")) {
-            String unit=palette.name.substring(4);
-            p.setTextAlign(Paint.Align.RIGHT);
-            text(c,unit,w-20,Math.min(h-24,140),Math.min(detailLevel==2?150:100,h*.55f),tint(secondary,detailLevel==2?22:12),medium);
-            p.setTextAlign(Paint.Align.LEFT);
-            int marks=unit.equals("00")?1:unit.equals("01")?2:3;
-            for(int i=0;i<marks;i++)line(c,w-22-i*9,6,w-18-i*9,12,secondary,2);
+        if(!fullMagi()){
+            line(c,20,1,Math.min(w-20,65),1,tint(accent,130),1);
+            return;
         }
+        int color=blockColor();
+        line(c,20,2,w-20,2,color,3);
+        line(c,2,20,2,h-20,color,3);
+        for(int y=28;y<h-16;y+=20)line(c,w-5,y,w-1,y,color,2);
+        c.save();c.clipRect(18,h-7,w-18,h-2);
+        for(int x=18;x<w-18;x+=16)line(c,x,h-7,x+8,h-2,tint(color,130),3);
+        c.restore();
+
     }
     private void button(Canvas c, RectF r, String label) {
         box(c, r.left, r.top+7, r.width(), 40, fingerDown&&r.equals(pressedRect)?surface(0xFF324557,75):surface(0xFF152131,24));
@@ -297,8 +312,15 @@ public class DashboardView extends View {
     private float padding(float w,float h){return bounded(Math.min(w,h)*.075f,12,24);}
     private void cardTitle(Canvas c,String label,float w,float h){
         float pad=padding(w,h);
-        if(nerv && detailLevel>0){p.setColor(tint(accent,18));c.drawRect(pad-5,pad-3,w-pad+5,pad+17,p);line(c,pad-5,pad-3,pad-5,pad+17,accent,2);}
-        fit(c,label,pad,pad+12,h<160?10:12,w-pad*2,accent);
+        if(fullMagi()){
+            int color=blockColor();boolean thermal=(drawingBlock.equals("cpu")||drawingBlock.equals("gpu"))&&hot(drawingBlock);
+            String title=thermal?drawingBlock.toUpperCase(Locale.ROOT)+" / THERMAL ALERT":label;
+            p.setColor(color);c.drawRect(pad-5,pad-4,w-pad+5,pad+18,p);
+            float reserved=w>270?58:0;
+            if(label.contains("RESOURCE LOAD")||label.equals("THERMAL HISTORY"))reserved=140;
+            fit(c,title,pad,pad+12,h<160?10:12,w-pad*2-reserved,0xFF100D14);
+            if(w>270 && reserved<100){p.setTextAlign(Paint.Align.RIGHT);text(c,"CH."+channel(),w-pad,pad+11,9,0xFF100D14,medium);p.setTextAlign(Paint.Align.LEFT);}
+        }else fit(c,label,pad,pad+12,h<160?10:12,w-pad*2,accent);
     }
     private void metric(Canvas c,String title,String value,String unit,RectF area,int color) {
         float font=bounded(area.height()*.47f,14,46);fit(c,title,area.left,area.top+11,10,area.width(),muted);
@@ -366,6 +388,10 @@ public class DashboardView extends View {
         long now=android.os.SystemClock.elapsedRealtime();float maximum=60;
         for(FpsPoint point:fpsHistory)if(Float.isFinite(point.fps))maximum=Math.max(maximum,point.fps);
         maximum=(float)Math.ceil(maximum/60)*60;
+        if(fullMagi() && bottom-top>=60){
+            for(int i=0;i<3;i++)text(c,number(maximum*(1-i/2f))+" FPS",left+4,top+11+(bottom-top-16)*i/2,8,muted,regular);
+            for(int i=0;i<=4;i++){float x=left+(right-left)*i/4;line(c,x,top,x,bottom,tint(accent,65),1);}
+        }
         Path path=new Path();boolean started=false;float lastX=0,lastY=0;
         for(FpsPoint point:fpsHistory) {
             if(now-point.time>60000)continue;
@@ -565,10 +591,22 @@ public class DashboardView extends View {
         if(spark.height()>=16){loadSpark(c,spark.left,spark.top,spark.width(),spark.height(),4,color);text(c,"MEMORY LOAD / 60 С",spark.left,h-pad+2,9,muted,medium);}
     }
     private void chartGrid(Canvas c,RectF plot,float maximum,boolean percent) {
-        if(nerv)for(int i=0;i<=10;i++){float x=plot.left+plot.width()*i/10;line(c,x,plot.top,x,plot.bottom,surface(0xFF38222A,24),1);}
-        for(int i=0;i<3;i++){float y=plot.top+plot.height()*i/2;line(c,plot.left,y,plot.right,y,surface(0xFF56313B,55),1);text(c,number(maximum*(1-i/2f))+(percent?"%":""),plot.right+5,y+4,9,muted,regular);}
+        int rows=fullMagi() && plot.height()>95?4:2;
+        if(nerv)for(int i=0;i<=10;i++){
+            float x=plot.left+plot.width()*i/10;line(c,x,plot.top,x,plot.bottom,tint(accent,fullMagi()?(i%5==0?75:30):16),1);
+            if(fullMagi())line(c,x,plot.bottom,x,plot.bottom+4,accent,1);
+        }
+        for(int i=0;i<=rows;i++){
+            float y=plot.top+plot.height()*i/rows;line(c,plot.left,y,plot.right,y,fullMagi()?tint(accent,70):surface(0xFF56313B,40),1);
+            text(c,number(maximum*(1-i/(float)rows))+(percent?"%":""),plot.right+5,y+4,9,muted,regular);
+            if(fullMagi())line(c,plot.left-4,y,plot.left,y,accent,2);
+        }
+        if(fullMagi()){line(c,plot.left,plot.top,plot.left,plot.bottom,accent,1);line(c,plot.left,plot.bottom,plot.right,plot.bottom,accent,1);}
     }
     private void chartTimes(Canvas c,RectF plot,float baseline,int seconds) {
+        if(fullMagi() && plot.width()>450)for(int i:new int[]{1,3}){
+            p.setTextAlign(Paint.Align.CENTER);text(c,"−"+seconds*(4-i)/4+" с",plot.left+plot.width()*i/4,baseline,9,accent,regular);p.setTextAlign(Paint.Align.LEFT);
+        }
         text(c,"−"+seconds+" с",plot.left,baseline,9,muted,regular);
         if(plot.width()>260)text(c,"−"+seconds/2+" с",plot.centerX()-18,baseline,9,muted,regular);
         p.setTextAlign(Paint.Align.RIGHT);text(c,"СЕЙЧАС",plot.right,baseline,9,muted,regular);p.setTextAlign(Paint.Align.LEFT);
@@ -586,7 +624,7 @@ public class DashboardView extends View {
             }
             p.setColor(series==0?accent:secondary);p.setStrokeWidth(2);p.setStyle(Paint.Style.STROKE);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
         }
-        if(w>320){text(c,"CPU",w-pad-100,pad+12,10,accent,medium);text(c,"GPU",w-pad-49,pad+12,10,secondary,medium);}
+        if(w>320){text(c,"CPU",w-pad-100,pad+12,10,fullMagi()?0xFF100D14:accent,medium);text(c,"GPU",w-pad-49,pad+12,10,fullMagi()?0xFF100D14:secondary,medium);}
         chartTimes(c,plot,h-pad,180);
     }
     private void nervSegments(Canvas c,float left,float top,float width,float height,float load,int color,int count) {
@@ -598,6 +636,10 @@ public class DashboardView extends View {
         }
     }
     private void loadSpark(Canvas c,float left,float top,float width,float height,int series,int color) {
+        if(fullMagi() && height>=36){
+            for(int i=0;i<3;i++){float y=top+height*i/2;line(c,left,y,left+width,y,tint(color,45),1);text(c,""+(100-i*50),left+3,y+9,7,muted,regular);}
+            for(int i=0;i<=4;i++){float x=left+width*i/4;line(c,x,top,x,top+height,tint(color,25),1);}
+        }
         Path path=new Path();boolean started=false;long now=android.os.SystemClock.elapsedRealtime();
         for(ThermalPoint point:history) {
             if(now-point.time>60000)continue;float value=point.values[series];if(!Float.isFinite(value)){started=false;continue;}
@@ -642,6 +684,7 @@ public class DashboardView extends View {
         drawnCards.put(key,target);
         c.save();c.clipRect(target);c.translate(target.left,target.top);
         float ratio=aspectRatio();c.scale(1/ratio,1);localCoordinates=true;
+        drawingBlock=key;
         float w=target.width()*ratio,h=target.height();box(c,0,0,w,h,panel);panelFrame(c,w,h);
         if(!editing && (key.equals("cpu")||key.equals("gpu")||key.equals("main")||key.equals("memory")||key.equals("history")))focusTargets.put(key,new RectF(target));
         switch(key) {
@@ -654,7 +697,7 @@ public class DashboardView extends View {
             case "side":cooling(c,w,h);break;
             case "network":networkCard(c,w,h);break;
         }
-        localCoordinates=false;c.restore();
+        drawingBlock="";localCoordinates=false;c.restore();
     }
     private void drawEditorHeader(Canvas c,boolean game) {
         button(c,modeHit,"РЕДАКТОР / "+(game?"ИГРА":"ОБЗОР"));
@@ -672,7 +715,7 @@ public class DashboardView extends View {
     private void finishAnimation(Canvas c,String key) {
         long now=android.os.SystemClock.elapsedRealtime();
         if(!key.equals(transitionKey)){transitionKey=key;transitionStart=now;}
-        if(!nerv || detailLevel==0)return;
+        if(!fullMagi())return;
         p.setStyle(Paint.Style.FILL);
         for(int i=0;i<80;i++) {
             float x=36+i*18; if(x>1164)break;Path stripe=new Path();stripe.moveTo(x,716);stripe.lineTo(x+7,716);stripe.lineTo(x+14,721);stripe.lineTo(x+7,721);stripe.close();p.setColor(secondary);c.drawPath(stripe,p);
@@ -770,6 +813,7 @@ public class DashboardView extends View {
     private void drawFocus(Canvas c){
         float ratio=aspectRatio(),w=focusArea.width()*ratio,h=focusArea.height();
         c.save();c.translate(focusArea.left,focusArea.top);c.scale(1/ratio,1);localCoordinates=true;
+        drawingBlock=focusedMetric;
         box(c,0,0,w,h,panel);panelFrame(c,w,h);
         String key=focusedMetric;
         cardTitle(c,"FOCUS / "+(key.equals("main")?"FPS":key.toUpperCase(Locale.ROOT))+" · ТАП — НАЗАД",w,h);
@@ -787,7 +831,7 @@ public class DashboardView extends View {
             if(fps)fpsSignal(c,new RectF(24,370,w-24,h-24),data);
             else {text(c,cpu||gpu?"TEMPERATURE / 60 С":"MEMORY LOAD / 60 С",24,378,11,color,medium);loadSpark(c,24,398,w-48,h-430,cpu?0:gpu?1:4,color);}
         }
-        localCoordinates=false;c.restore();
+        drawingBlock="";localCoordinates=false;c.restore();
     }
     String statusText(){
         long age=Math.max(0,(android.os.SystemClock.elapsedRealtime()-lastGood)/1000);
@@ -799,8 +843,15 @@ public class DashboardView extends View {
     }
     private void drawStatus(Canvas c){
         int color=sample==null || !sample.isNull("sensorError")?ALERT:muted;
-        line(c,36,731,1164,731,tint(color,70),1);
-        fit(c,statusText(),36,750,11,1128,color);
+        if(fullMagi()){
+            color=stateColor();p.setColor(color);c.drawRect(36,731,250,756,p);
+            fit(c,operationalState(),44,749,12,198,0xFF100D14);
+            p.setColor(tint(color,25));c.drawRect(250,731,1164,756,p);
+            fit(c,statusText(),262,749,10,890,color);
+        }else {
+            line(c,36,731,1164,731,tint(color,70),1);
+            fit(c,statusText(),36,750,11,1128,color);
+        }
     }
     private RectF controlAt(float x,float y) {
         if(editing){for(RectF r:new RectF[]{themeHit,settingsHit,new RectF(655,20,820,86)})if(r.contains(x,y))return r;return null;}
