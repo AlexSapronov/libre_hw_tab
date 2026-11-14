@@ -20,7 +20,7 @@ public class DashboardView extends View {
     private final ArrayDeque<ThermalPoint> history = new ArrayDeque<>();
     private JSONObject sample;
     private String error = "Ожидание подключения";
-    private boolean demo;
+    private boolean demo,receivedSample;
     public int themeId;
     public int detailLevel=1; // 0 clean, 1 NERV, 2 full MAGI
     static final String[] DETAIL_LABELS={"Чистый","NERV","Полный MAGI"};
@@ -106,7 +106,7 @@ public class DashboardView extends View {
                 if(i<2)line(c,pad,top+rowHeight-3,w-pad,top+rowHeight-3,surface(0xFF38222A,24),1);
             }
             line(c,track.left,track.top,track.right,track.top,surface(0xFF3D4555,65),rowHeight<36?4:7);
-            if(available){float x=track.left+(float)volume*track.width();line(c,track.left,track.top,x,track.top,color,rowHeight<36?4:7);p.setColor(white);c.drawCircle(x,track.top,rowHeight<36?3:7,p);}
+            if(available){float x=track.left+(float)volume*track.width();line(c,track.left,track.top,x,track.top,color,rowHeight<36?4:7);p.setColor(white);circle(c,x,track.top,rowHeight<36?3:7,p);}
             registerAudio(key,id,"volume",hit,track,available,isMuted,false);
         }
         if(audioCommandPending){float x=pad+(animations?(android.os.SystemClock.elapsedRealtime()%1000)/1000f*(w-pad*2-30):0);line(c,x,h-3,x+30,h-3,accent,2);if(animations)postInvalidateOnAnimation();}
@@ -160,9 +160,9 @@ public class DashboardView extends View {
         setContentDescription("Панель мониторинга ПК. Настройки и тема расположены вверху справа.");
         setFocusable(true);
     }
-    public void clear() {closeFocus(); history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = "Подключение…"; invalidate(); }
+    public void clear() {closeFocus();receivedSample=false; history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data; if(data==null)audioOverride=null; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
+        sample = data; if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         JSONObject incoming=data==null?null:data.optJSONObject("media");
         if(incoming!=null) {displayMedia=incoming;mediaReceived=now;lastMediaSeen=now;mediaTransition=false;}
@@ -204,6 +204,9 @@ public class DashboardView extends View {
             if(h>50){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor((accent&0xffffff)|0x66000000);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);}
         }
     }
+    private void circle(Canvas c,float x,float y,float radius,Paint paint){
+        c.save();c.translate(x,y);c.scale(1/textRatio(),1);c.drawCircle(0,0,radius,paint);c.restore();
+    }
     private void line(Canvas c, float x, float y, float endX, float endY, int color, float stroke) {
         p.setShader(null); p.setColor(color); p.setStrokeWidth(stroke); p.setStyle(Paint.Style.STROKE); c.drawLine(x,y,endX,endY,p); p.setStyle(Paint.Style.FILL);
     }
@@ -232,7 +235,7 @@ public class DashboardView extends View {
         button(c, themeHit, "THEME / "+palette.name); button(c, settingsHit, "ПОДКЛЮЧЕНИЕ");
         boolean healthy = sample != null && sample.isNull("sensorError");
         int status = sample == null ? ALERT : healthy ? accent : ALERT;
-        p.setColor(status); c.drawCircle(43, 93, 4, p);
+        p.setColor(status); circle(c,43, 93, 4, p);
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "SIGNAL LOST  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
         drawnCards.clear();audioControls.clear();
@@ -367,7 +370,7 @@ public class DashboardView extends View {
             if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);lastX=x;lastY=y;
         }
         p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
-        if(started){p.setColor(accent);c.drawCircle(lastX,lastY,3,p);}
+        if(started){p.setColor(accent);circle(c,lastX,lastY,3,p);}
         if(fpsHistory.size()<2)fit(c,"ОЖИДАНИЕ СИГНАЛА",left+8,top+20,10,right-left-16,muted);
         if(budget) {
             float frame=value(game,"frameTime"),row=(area.height()-8)/3;
@@ -505,7 +508,7 @@ public class DashboardView extends View {
     }
     private void valueWithUnit(Canvas c,String value,float x,float baseline,float size,String unit,float unitSize,float rise,int color) {
         text(c,value,x,baseline,size,white,digits);
-        float unitX=x+p.measureText(value)+10;
+        float unitX=x+(p.measureText(value)+10)/textRatio();
         text(c,unit,unitX,baseline-rise,unitSize,color,medium);
     }
     private void loadLabel(Canvas c, float centerX, float centerY, float load) {
@@ -593,7 +596,7 @@ public class DashboardView extends View {
         else if(media.optBoolean("playing"))position+=(android.os.SystemClock.elapsedRealtime()-mediaReceived)/1000.0;
         if(duration>0)position=Math.min(position,duration);
         line(c,204,673,840,673,surface(0xFF263446,35),5);
-        if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);c.drawCircle(x,673,4,p);}
+        if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);circle(c,x,673,4,p);}
         text(c,mediaTime(position)+" / "+(duration>0?mediaTime(duration):"LIVE"),204,694,9,muted,regular);
         mediaButton(c,mediaPrevious,"|◀",media.optBoolean("canPrevious")&&!mediaTransition&&!mediaCommandPending);
         mediaButton(c,mediaToggle,media.optBoolean("playing")?"Ⅱ":"▶",media.optBoolean("canToggle")&&!mediaTransition&&!mediaCommandPending);
@@ -721,7 +724,8 @@ public class DashboardView extends View {
             if(focusGesture!=null){performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);return true;}
         }
         if(focusGesture==null)return false;
-        if(action==MotionEvent.ACTION_CANCEL || action==MotionEvent.ACTION_POINTER_DOWN){focusGesture=null;return true;}
+        if(action==MotionEvent.ACTION_CANCEL){focusGesture=null;return true;}
+        if(action==MotionEvent.ACTION_POINTER_DOWN){focusGesture="cancelled";return true;}
         if(action==MotionEvent.ACTION_MOVE && Math.hypot(event.getX()-focusDownX,event.getY()-focusDownY)>ViewConfiguration.get(getContext()).getScaledTouchSlop()){
             focusGesture="cancelled";return true;
         }
@@ -757,7 +761,7 @@ public class DashboardView extends View {
     String statusText(){
         long age=Math.max(0,(android.os.SystemClock.elapsedRealtime()-lastGood)/1000);
         String link=sample==null?"SIGNAL LOST":demo?"DEMO":sample.isNull("sensorError")?"LINK ONLINE":"SENSOR ERROR";
-        String ageText=sample==null?"НЕТ ПАКЕТА":(demo?"ДЕМО-ПАКЕТ ":"ПАКЕТ ")+age+" С НАЗАД";
+        String ageText=!receivedSample?"НЕТ ПАКЕТА":(demo?"ДЕМО-ПАКЕТ ":"ПАКЕТ ")+age+" С НАЗАД";
         String state=standby()?"STANDBY":focusedMetric!=null?"FOCUS / "+focusedMetric.toUpperCase(Locale.ROOT):playing()?"GAME":"OVERVIEW";
         JSONObject audio=audio(),mic=audio==null?null:audio.optJSONObject("microphone");
         return link+"  /  "+ageText+"  /  "+state+(sample!=null&&mic!=null&&mic.optBoolean("available")&&mic.optBoolean("muted")?"  /  MIC CUT":"");
