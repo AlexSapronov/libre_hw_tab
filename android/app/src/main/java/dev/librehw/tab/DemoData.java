@@ -12,6 +12,9 @@ final class DemoData {
         JSONArray frames=new JSONArray(); for(int i=0;i<300;i++)frames.put(7.3+Math.sin(i/8.0)*1.2+(i==120?12:0));
         data.put("game",new JSONObject().put("active",false).put("status","idle").put("name","DEMO · World of Warcraft")
             .put("fps",136+wave*8).put("frameTime",7.35).put("low1",111).put("low01",94).put("frames",frames).put("frameSeries",frames).put("historySeconds",60).put("bucketMs",200).put("paused",false));
+        JSONArray buses=new JSONArray();String[] keys={"chrome","game","discord"};double[] levels={.65,.8,1};
+        for(int i=0;i<3;i++)buses.put(new JSONObject().put("key",keys[i]).put("id","demo-"+keys[i]).put("available",true).put("volume",levels[i]).put("muted",false).put("mixed",false).put("sessions",1));
+        data.put("audio",new JSONObject().put("ready",true).put("microphone",new JSONObject().put("id","demo-mic").put("available",true).put("muted",false).put("mixed",false).put("devices",2)).put("buses",buses));
         return data;
     }
     private static JSONObject device(String name, double temperature, double load, double clock, double power, double fan, double used, double total) throws JSONException {

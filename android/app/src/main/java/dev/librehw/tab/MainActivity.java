@@ -30,6 +30,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private HttpURLConnection connection;
     private ScheduledExecutorService extras;
     private long lastWake;
+    private final ExecutorService audioWorker=Executors.newSingleThreadExecutor();
     private final ExecutorService mediaWorker=Executors.newSingleThreadExecutor();
     private volatile boolean mediaBusy,thumbnailBusy;
     private String thumbnailId="";
@@ -54,14 +55,16 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             dashboard.mode=(dashboard.mode+1)%3;
             preferences.edit().putInt("mode",dashboard.mode).apply(); dashboard.invalidate();
         };
-        dashboard.layout=DashboardLayout.parse(preferences.getString("layout_v1","{}"));
+        String savedLayout=preferences.getString("layout_v1","{}");
+        try{if(new JSONObject(savedLayout).optInt("version")==1 && !preferences.contains("layout_before_audio"))preferences.edit().putString("layout_before_audio",savedLayout).apply();}catch(Exception ignored){}
+        dashboard.layout=DashboardLayout.parse(savedLayout);
         dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
         dashboard.animations=preferences.getBoolean("animations",true);
         try{dashboard.weather=new JSONObject(preferences.getString("weather_cache",""));}catch(Exception ignored){}
         dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
         dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
         dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
-        dashboard.onMedia=this::mediaCommand;
+        dashboard.onMedia=this::mediaCommand;dashboard.onAudio=this::audioCommand;
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);
@@ -152,6 +155,21 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             String failure=null;try{MediaClient.control(pc,key,id,action,position);}catch(Exception ex){failure=ex.getMessage();}
             final String message=failure;
             ui.post(()->{mediaBusy=false;dashboard.mediaCommandPending=false;dashboard.invalidate();if(active&&message!=null)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();});
+        });
+    }
+    private void audioCommand(String key,String id,String action,double value) {
+        if(demo||dashboard.audioCommandPending)return;
+        String pc=address,secret=token;int requestGeneration=generation;
+        dashboard.audioCommandPending=true;dashboard.pendingAudioKey=key;dashboard.pendingAudioVolume=action.equals("volume")?value:Double.NaN;dashboard.invalidate();
+        audioWorker.submit(()->{
+            JSONObject confirmed=null;String error=null;
+            try{confirmed=AudioClient.control(pc,secret,key,id,action,value);}catch(Exception ex){error=ex.getMessage();}
+            JSONObject result=confirmed;String failure=error;
+            ui.post(()->{
+                dashboard.audioCommandPending=false;dashboard.pendingAudioKey="";dashboard.pendingAudioVolume=Double.NaN;
+                if(active && requestGeneration==generation){if(result!=null)dashboard.audioAcknowledged(result);else if(failure!=null)Toast.makeText(this,failure,Toast.LENGTH_SHORT).show();}
+                dashboard.invalidate();
+            });
         });
     }
     private EditText field(LinearLayout layout, String hint, String value, boolean secret) {
@@ -247,7 +265,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 if(index==0){
                     boolean game=dashboard.playing();String[] keys=DashboardLayout.keys(game);boolean[] checked=new boolean[keys.length];
                     for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.visible(keys[i],game);
-                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":"Правая панель";
+                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":keys[i].equals("audio")?"Микшер звука":"Правая панель";
                     new AlertDialog.Builder(this).setTitle("Видимые блоки").setMultiChoiceItems(labels,checked,(v,item,on)->{
                         String key=DashboardLayout.id(keys[item],game);if(on)dashboard.layout.hidden.remove(key);else dashboard.layout.hidden.add(key);dashboard.invalidate();
                     }).setPositiveButton("Готово",null).show();
@@ -345,7 +363,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {
-        cancelPairing(); pairingWorker.shutdownNow();mediaWorker.shutdownNow();
+        cancelPairing(); pairingWorker.shutdownNow();mediaWorker.shutdownNow();audioWorker.shutdownNow();
         if (pairingDialog != null) pairingDialog.dismiss();
         super.onDestroy();
     }

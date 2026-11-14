@@ -28,6 +28,74 @@ public class DashboardView extends View {
     public Bitmap mediaThumbnail;
     public interface MediaAction { void run(String action,double fraction); }
     public MediaAction onMedia=(action,fraction)->{};
+    interface AudioAction {void run(String key,String id,String action,double value);}
+    public AudioAction onAudio=(key,id,action,value)->{};
+    public boolean audioCommandPending;
+    public String pendingAudioKey="";
+    public double pendingAudioVolume=Double.NaN;
+    private JSONObject audioOverride;
+    private long audioOverrideUntil;
+    private AudioControl audioDrag,pressedAudio;
+    private double audioPreview=Double.NaN;
+    final Map<String,AudioControl> audioControls=new LinkedHashMap<>();
+    static final class AudioControl {
+        final String key,id,action;final RectF hit,track;final boolean enabled,muted,vertical;
+        AudioControl(String key,String id,String action,RectF hit,RectF track,boolean enabled,boolean muted,boolean vertical){this.key=key;this.id=id;this.action=action;this.hit=hit;this.track=track;this.enabled=enabled;this.muted=muted;this.vertical=vertical;}
+        double fraction(float x,float y){return Math.max(0,Math.min(1,vertical?1-(y-track.top)/Math.max(1,track.height()):(x-track.left)/Math.max(1,track.width())));}
+    }
+    JSONObject audio(){return audioOverride!=null&&android.os.SystemClock.elapsedRealtime()<audioOverrideUntil?audioOverride:object("audio");}
+    public void audioAcknowledged(JSONObject value){audioOverride=value;audioOverrideUntil=android.os.SystemClock.elapsedRealtime()+700;invalidate();}
+    private AudioControl audioAt(float x,float y){if(editing||!playing()||standby()||audioCommandPending)return null;for(AudioControl control:audioControls.values())if(control.enabled&&control.hit.contains(x,y))return control;return null;}
+    private void registerAudio(String key,String id,String action,RectF localHit,RectF localTrack,boolean enabled,boolean muted,boolean vertical) {
+        RectF origin=drawnCards.get("audio");if(origin==null)return;
+        RectF hit=new RectF(localHit),track=new RectF(localTrack);hit.offset(origin.left,origin.top);track.offset(origin.left,origin.top);
+        audioControls.put(key+"."+action,new AudioControl(key,id,action,hit,track,enabled&&!audioCommandPending,muted,vertical));
+    }
+    private void audioCard(Canvas c,float w,float h) {
+        float pad=padding(w,h);boolean compact=h<210;cardTitle(c,"05 / AUDIO MIXER",w,h);
+        JSONObject state=audio(),mic=state==null?null:state.optJSONObject("microphone");boolean ready=state!=null&&state.optBoolean("ready");
+        boolean micAvailable=ready&&mic!=null&&mic.optBoolean("available"),micMuted=mic!=null&&mic.optBoolean("muted"),mixed=mic!=null&&mic.optBoolean("mixed");
+        RectF microphone=new RectF(pad,pad+20,w-pad,pad+20+(compact?bounded(h*.24f,20,38):bounded(h*.18f,42,60)));
+        int micColor=!micAvailable?muted:mixed?0xFFFFC36A:micMuted?secondary:accent;
+        box(c,microphone.left,microphone.top,microphone.width(),microphone.height(),0xFF263446);
+        String status=!ready?state==null?"ОБНОВИ АГЕНТ ПК":"ЗВУК НЕДОСТУПЕН":!micAvailable?"МИКРОФОН НЕДОСТУПЕН":mixed?"МИКРОФОН / MIXED":micMuted?"МИКРОФОН / MUTED":"МИКРОФОН / ON";
+        fit(c,status,microphone.left+10,microphone.centerY()+(compact?4:micAvailable?-3:5),compact?11:18,microphone.width()-20,micColor);
+        if(!compact&&micAvailable)fit(c,"ВСЕ ВХОДЫ WINDOWS · "+mic.optInt("devices")+(audioCommandPending&&pendingAudioKey.equals("microphone")?" · КОМАНДА…":""),microphone.left+10,microphone.bottom-8,9,microphone.width()-20,muted);
+        registerAudio("microphone",mic==null?"":mic.optString("id"),"mute",microphone,microphone,micAvailable,micMuted,false);
+        JSONArray buses=state==null?null:state.optJSONArray("buses");String[] keys={"chrome","game","discord"},names={"CHROME","ИГРА","DISCORD"};
+        float cw=(w-pad*2)/3;
+        for(int i=0;i<3;i++) {
+            JSONObject bus=null;if(buses!=null)for(int n=0;n<buses.length();n++){JSONObject item=buses.optJSONObject(n);if(item!=null&&keys[i].equals(item.optString("key"))){bus=item;break;}}
+            String key=keys[i],id=bus==null?"":bus.optString("id");boolean available=ready&&bus!=null&&bus.optBoolean("available"),isMuted=bus!=null&&bus.optBoolean("muted");
+            double volume=bus==null?0:bus.optDouble("volume",0);
+            if(audioDrag!=null&&audioDrag.key.equals(key)&&Double.isFinite(audioPreview))volume=audioPreview;
+            else if(audioCommandPending&&pendingAudioKey.equals(key)&&Double.isFinite(pendingAudioVolume))volume=pendingAudioVolume;
+            volume=Math.max(0,Math.min(1,volume));
+            float x=pad+i*cw,cx=x+cw/2;int color=!available?muted:isMuted?secondary:accent;
+            float labelY=compact?microphone.bottom+11:microphone.bottom+24;
+            fit(c,names[i],x+4,labelY,compact?9:12,cw-8,color);
+            RectF track,hit;
+            if(compact) {
+                float y=h-21;track=new RectF(x+8,y,x+cw-8,y);
+                hit=new RectF(x+3,microphone.bottom+3,x+cw-3,h-2);
+                line(c,track.left,y,track.right,y,0xFF3D4555,4);if(available)line(c,track.left,y,track.left+(float)volume*track.width(),y,color,4);
+                if(available){p.setColor(color);c.drawCircle(track.left+(float)volume*track.width(),y,4,p);}
+                fit(c,available?Math.round(volume*100)+"%":"—",x+4,h-6,10,cw-8,available?white:muted);
+            }else {
+                float top=labelY+20,bottom=Math.max(top+12,h-pad-64);track=new RectF(cx,top,cx,bottom);hit=new RectF(x+8,top-9,x+cw-8,bottom+10);
+                line(c,cx,top,cx,bottom,0xFF3D4555,7);
+                for(int tick=0;tick<=4;tick++){float y=top+(bottom-top)*tick/4;line(c,cx-19,y,cx-12,y,0xFF56313B,1);line(c,cx+12,y,cx+19,y,0xFF56313B,1);}
+                if(available){float y=bottom-(float)volume*(bottom-top);line(c,cx,y,cx,bottom,color,7);box(c,cx-13,y-5,26,10,white);}
+                fit(c,available?Math.round(volume*100)+"%"+(bus.optBoolean("mixed")?"*":""):"НЕТ СЕАНСА",x+4,h-pad-40,available?16:9,cw-8,available?white:muted);
+                RectF mute=new RectF(x+8,h-pad-29,x+cw-8,h-pad+3);
+                box(c,mute.left,mute.top,mute.width(),mute.height(),available?0xFF263446:0xFF152131);
+                fit(c,isMuted?"MUTED":"MUTE",mute.left+5,mute.centerY()+4,10,mute.width()-10,color);
+                registerAudio(key,id,"mute",mute,mute,available,isMuted,false);
+            }
+            registerAudio(key,id,"volume",hit,track,available,isMuted,!compact);
+        }
+        if(audioCommandPending){float x=pad+(animations?(android.os.SystemClock.elapsedRealtime()%1000)/1000f*(w-pad*2-30):0);line(c,x,h-3,x+30,h-3,accent,2);if(animations)postInvalidateOnAnimation();}
+    }
     private long mediaReceived,lastMediaSeen;
     private JSONObject displayMedia;
     private boolean mediaTransition;
@@ -72,9 +140,9 @@ public class DashboardView extends View {
         setContentDescription("Панель мониторинга ПК. Настройки и тема расположены вверху справа.");
         setFocusable(true);
     }
-    public void clear() { history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null; sample = null; error = "Подключение…"; invalidate(); }
+    public void clear() { history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
+        sample = data; if(data==null)audioOverride=null; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         JSONObject incoming=data==null?null:data.optJSONObject("media");
         if(incoming!=null) {displayMedia=incoming;mediaReceived=now;lastMediaSeen=now;mediaTransition=false;}
@@ -142,8 +210,8 @@ public class DashboardView extends View {
         p.setColor(status); c.drawCircle(43, 93, 4, p);
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "OFFLINE  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
-        drawnCards.clear();
-        if(playing)drawBlock(c,"main",true);
+        drawnCards.clear();audioControls.clear();
+        if(playing){drawBlock(c,"main",true);drawBlock(c,"audio",true);}
         else {
             drawBlock(c,"cpu",false);
             drawBlock(c,"gpu",false);
@@ -468,6 +536,7 @@ public class DashboardView extends View {
         float w=target.width(),h=target.height();box(c,0,0,w,h,panel);
         switch(key) {
             case "main":gamePanel(c,w,h);break;
+            case "audio":audioCard(c,w,h);break;
             case "cpu":device(c,w,h,"CPU",object("cpu"),accent,0);break;
             case "gpu":device(c,w,h,"GPU",object("gpu"),secondary,1);break;
             case "memory":memory(c,w,h);break;
@@ -556,6 +625,7 @@ public class DashboardView extends View {
     private RectF controlAt(float x,float y) {
         if(editing){for(RectF r:new RectF[]{themeHit,settingsHit,new RectF(655,20,820,86)})if(r.contains(x,y))return r;return null;}
         if(standby()){for(RectF r:new RectF[]{clockBack,settingsHit,clockWake,clockAlarm,clockWeather})if(r.contains(x,y))return r;return null;}
+        AudioControl audio=audioAt(x,y);if(audio!=null)return audio.hit;
         if(mediaVisible() && !mediaTransition && !mediaCommandPending) {
             JSONObject m=media();
             if(mediaPrevious.contains(x,y)&&m.optBoolean("canPrevious"))return mediaPrevious;
@@ -582,13 +652,25 @@ public class DashboardView extends View {
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
+        if(!editing && event.getAction()==MotionEvent.ACTION_DOWN){
+            pressedAudio=audioAt(x,y);
+            if(pressedAudio!=null && pressedAudio.action.equals("volume")){
+                audioDrag=pressedAudio;audioPreview=audioDrag.fraction(x,y);pressedRect=audioDrag.hit;fingerDown=true;touchStarted=true;
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);invalidate();return true;
+            }
+        }
+        if(audioDrag!=null){
+            if(event.getAction()==MotionEvent.ACTION_MOVE){audioPreview=audioDrag.fraction(x,y);invalidate();return true;}
+            if(event.getAction()==MotionEvent.ACTION_UP){AudioControl control=audioDrag;double value=control.fraction(x,y);audioDrag=null;audioPreview=Double.NaN;fingerDown=false;touchStarted=false;releasedAt=android.os.SystemClock.elapsedRealtime();onAudio.run(control.key,control.id,"volume",value);invalidate();return true;}
+            if(event.getAction()==MotionEvent.ACTION_CANCEL){audioDrag=null;audioPreview=Double.NaN;fingerDown=false;touchStarted=false;pressedRect=null;pressedAudio=null;invalidate();return true;}
+        }
         if(event.getAction()==MotionEvent.ACTION_DOWN){touchStarted=true;pressedRect=controlAt(x,y);fingerDown=pressedRect!=null;if(fingerDown)performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);invalidate();}
-        if(event.getAction()==MotionEvent.ACTION_CANCEL){fingerDown=false;touchStarted=false;pressedRect=null;invalidate();return true;}
+        if(event.getAction()==MotionEvent.ACTION_CANCEL){fingerDown=false;touchStarted=false;pressedRect=null;pressedAudio=null;invalidate();return true;}
         if(event.getAction()==MotionEvent.ACTION_MOVE && fingerDown && !pressedRect.contains(x,y)){fingerDown=false;pressedRect=null;invalidate();}
         if(event.getAction()==MotionEvent.ACTION_UP){
             boolean cancelled=touchStarted && (pressedRect==null || !pressedRect.contains(x,y));
             fingerDown=false;touchStarted=false;releasedAt=android.os.SystemClock.elapsedRealtime();invalidate();
-            if(cancelled && !editing)return true;
+            if(cancelled && !editing){pressedAudio=null;return true;}
         }
         if(editing) {
             if(event.getAction()==MotionEvent.ACTION_DOWN) {
@@ -607,6 +689,8 @@ public class DashboardView extends View {
         }
         if(event.getAction()==MotionEvent.ACTION_UP) {
             performClick();
+            AudioControl audio=pressedAudio!=null?pressedAudio:audioAt(x,y);pressedAudio=null;
+            if(!editing && audio!=null && audio.enabled && audio.hit.contains(x,y) && !audioCommandPending){onAudio.run(audio.key,audio.id,audio.action,audio.action.equals("mute")?(audio.muted?0:1):audio.fraction(x,y));return true;}
             if(mediaVisible() && new RectF(36,589,1164,704).contains(x,y)) {
                 JSONObject media=media();
                 if(mediaTransition || mediaCommandPending)return true;

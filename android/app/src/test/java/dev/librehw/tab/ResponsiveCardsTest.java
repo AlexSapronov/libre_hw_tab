@@ -20,8 +20,8 @@ public class ResponsiveCardsTest {
     }
     @Test public void WideCardsReflowContentToLeadingEdgeInsteadOfCenteringOldSizedCard() throws Exception {
         DashboardView view=view();
-        for(String key:new String[]{"cpu","gpu","memory","history","side","main"}) {
-            boolean game=key.equals("main");view.mode=game?2:1;view.layout=new DashboardLayout();
+        for(String key:new String[]{"cpu","gpu","memory","history","side","main","audio"}) {
+            boolean game=key.equals("main") || key.equals("audio");view.mode=game?2:1;view.layout=new DashboardLayout();
             for(String other:DashboardLayout.keys(game))if(!other.equals(key))view.layout.hidden.add(DashboardLayout.id(other,game));
             view.layout.positions.put(DashboardLayout.id(key,game),new RectF(36,125,736,375));
             Bitmap bitmap=render(view,"reflow-wide-"+key);
@@ -35,8 +35,8 @@ public class ResponsiveCardsTest {
     @Test public void CompactTallWideAndMediaLayoutsRenderForEveryCardWithoutMutatingSavedLayout() throws Exception {
         DashboardView view=view();
         float[][] sizes={{160,110},{220,450},{500,180}};
-        for(String key:new String[]{"cpu","memory","history","side","main"})for(int n=0;n<sizes.length;n++) {
-            boolean game=key.equals("main") || key.equals("side");view.mode=game?2:1;view.layout=new DashboardLayout();
+        for(String key:new String[]{"cpu","memory","history","side","main","audio"})for(int n=0;n<sizes.length;n++) {
+            boolean game=key.equals("main") || key.equals("side") || key.equals("audio");view.mode=game?2:1;view.layout=new DashboardLayout();
             for(String other:DashboardLayout.keys(game))if(!other.equals(key))view.layout.hidden.add(DashboardLayout.id(other,game));
             view.layout.positions.put(DashboardLayout.id(key,game),new RectF(36,125,36+sizes[n][0],125+sizes[n][1]));
             assertTrue(view.layout.valid(game));String saved=view.layout.json();

@@ -30,6 +30,12 @@ try {
     if ($mediaStale.StatusCode -ne 409) { throw 'Stale media commands must be rejected' }
     $thumbNoKey = Invoke-WebRequest ("http://127.0.0.1:$($config.Port)/api/v1/media/stale/thumbnail") -SkipHttpErrorCheck
     if ($thumbNoKey.StatusCode -ne 401) { throw 'Media thumbnails must require pairing token' }
+    if ('audio' -notin $sample.PSObject.Properties.Name) { throw 'Missing audio schema' }
+    $audioUrl = "http://127.0.0.1:$($config.Port)/api/v1/audio/control"
+    $audioNoKey = Invoke-WebRequest $audioUrl -Method Post -ContentType 'application/json' -Body '{"key":"microphone","id":"stale","muted":true}' -SkipHttpErrorCheck
+    if ($audioNoKey.StatusCode -ne 401) { throw 'Audio control must require pairing token' }
+    $audioStale = Invoke-WebRequest $audioUrl -Method Post -Headers @{ 'X-Libre-Token' = $config.Token } -ContentType 'application/json' -Body '{"key":"microphone","id":"stale","muted":true}' -SkipHttpErrorCheck
+    if ($audioStale.StatusCode -notin @(409,503)) { throw 'Stale audio request must not alter audio; 503 is allowed on a runner without audio service' }
     $capture = Start-Process (Join-Path $PWD 'package/agent/PresentMon.exe') -ArgumentList @('--no_csv','--no_console_stats','--v1_metrics','--no_track_gpu','--no_track_input','--session_name',"LibreHwTab-Smoke-$PID",'--timed','2','--terminate_after_timed') -PassThru -NoNewWindow
     try { $capture | Wait-Process -Timeout 15 } catch { Stop-Process -Id $capture.Id -Force; throw }
     $capture.Refresh()
