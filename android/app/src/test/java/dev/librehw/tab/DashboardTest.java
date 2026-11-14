@@ -45,6 +45,13 @@ public class DashboardTest {
         for(int theme=0;theme<DashboardTheme.ALL.length;theme++) {
             view.themeId=theme;view.mode=0;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-game");
             view.mode=1;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-overview");
+            if(DashboardTheme.ALL[theme].isNerv()) {
+                view.animations=false;view.mode=2;
+                view.accept(new JSONObject(data.toString()).put("media",MediaPanelTest.media()),"",true);
+                render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-media");
+                view.forceStandby=true;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-standby");view.forceStandby=false;
+                view.clear();view.accept(data,"",true);
+            }
         }
         view.themeId=0;view.mode=0;
         data.getJSONObject("game").put("paused",true).put("fps",org.json.JSONObject.NULL).put("frames",new org.json.JSONArray()).put("frameSeries",new org.json.JSONArray());

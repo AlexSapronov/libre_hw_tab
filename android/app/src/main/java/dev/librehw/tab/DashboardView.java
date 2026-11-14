@@ -240,8 +240,10 @@ public class DashboardView extends View {
         for(int x=36;x<=1164;x+=24)line(c,x,112,x,116,surface(0,70),1);
         line(c,36,112,1164,112,tint(accent,60),1);
         line(c,36,68,285,68,tint(accent,110),1);
-        text(c,"TACTICAL TELEMETRY / "+palette.name,36,744,9,tint(accent,190),medium);
-        text(c,"MAGI SYSTEM / LOCAL MONITOR",900,744,9,muted,regular);
+        if(!standby()){
+            text(c,"TACTICAL TELEMETRY / "+palette.name,36,748,9,tint(accent,190),medium);
+            text(c,"MAGI SYSTEM / LOCAL MONITOR",900,748,9,muted,regular);
+        }
     }
     private void panelFrame(Canvas c,float w,float h) {
         if(!nerv)return;
@@ -568,7 +570,7 @@ public class DashboardView extends View {
     }
     private void mediaButton(Canvas c,RectF rect,String title,boolean enabled) {
         boolean pressed=fingerDown&&rect.equals(pressedRect);
-        box(c,rect.left+(pressed?2:0),rect.top+(pressed?2:0),rect.width()-(pressed?4:0),rect.height()-(pressed?4:0),pressed?0xFF40536A:enabled?surface(0xFF263446,35):surface(0xFF152131,18));
+        box(c,rect.left+(pressed?2:0),rect.top+(pressed?2:0),rect.width()-(pressed?4:0),rect.height()-(pressed?4:0),pressed?surface(0xFF40536A,80):enabled?surface(0xFF263446,35):surface(0xFF152131,18));
         p.setTextAlign(Paint.Align.CENTER);text(c,title,rect.centerX(),rect.centerY()+(pressed?12:10),29,enabled?accent:muted,medium);p.setTextAlign(Paint.Align.LEFT);
     }
     static String mediaTime(double seconds){int time=(int)Math.max(0,seconds);return time>=3600?String.format(Locale.US,"%d:%02d:%02d",time/3600,time/60%60,time%60):String.format(Locale.US,"%d:%02d",time/60,time%60);}
