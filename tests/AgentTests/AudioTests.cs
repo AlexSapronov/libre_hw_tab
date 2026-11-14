@@ -26,6 +26,7 @@ public class AudioTests {
         Assert.Equal(.6f,backend.Sessions[0].Volume);backend.MicError=true;Assert.False(engine.Read(42).Microphone.Available);Assert.Null(engine.Apply(new("microphone",mic.Id,Muted:true),42));
     }
     [Fact] public void StaleGameSessionInvalidRangesAndAmbiguousCommandsCannotChangeSound() {
+        Assert.Equal("game",AudioPolicy.Bus("",42,42));
         var backend=new Backend();var engine=new AudioEngine(backend);var old=engine.Read(42).Buses.Single(b=>b.Key=="game");
         Assert.Null(engine.Apply(new("game",old.Id,.2),99));Assert.Equal(.9f,backend.Sessions.Single(s=>s.Pid==99).Volume);
         foreach(double invalid in new[]{-1,1.1,double.NaN,double.PositiveInfinity})Assert.Null(engine.Apply(new("game",old.Id,invalid),42));

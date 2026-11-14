@@ -266,9 +266,9 @@ public class DashboardView extends View {
             float x=pad+heroWidth+pad,row=contentHeight/Math.max(1,stats.size());
             for(int i=0;i<stats.size();i++) {
                 String key=stats.get(i),label=key.equals("low1")?"1% LOW · 10 С":key.equals("low01")?"0,1% LOW · 60 С":"КАДР / мс";float y=top+i*row;
-                fit(c,label,x,y+10,9,w-pad-x,muted);
                 String reading=key.equals("frameTime")?decimal(value(game,key)):key.equals("low01")&&Float.isNaN(value(game,key))?low01Status(game):number(value(game,key));
-                fit(c,reading,x,y+row-4,bounded(row*.52f,20,34),w-pad-x,white);
+                if(row<34)fit(c,(key.equals("low1")?"1% ":key.equals("low01")?"0,1% ":"мс ")+reading,x,y+row-5,13,w-pad-x,white);
+                else {fit(c,label,x,y+10,9,w-pad-x,muted);fit(c,reading,x,y+row-4,bounded(row*.52f,20,34),w-pad-x,white);}
             }
             if(nerv&&layout.metric("history"))fpsSignal(c,new RectF(pad,contentBottom+16,w-pad,h-pad),game);
             return;

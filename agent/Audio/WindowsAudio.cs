@@ -27,7 +27,8 @@ internal sealed class WindowsAudio : IAudioBackend {
                             try {
                                 if(session.State==AudioSessionState.AudioSessionStateExpired || session.IsSystemSoundsSession)continue;
                                 int pid=(int)session.GetProcessID;if(pid<=0)continue;
-                                using var process=Process.GetProcessById(pid);sessions.Add(new App(device.ID,session,pid,process.ProcessName));
+                                string name="";try{using var process=Process.GetProcessById(pid);name=process.ProcessName;}catch{}
+                                sessions.Add(new App(device.ID,session,pid,name));
                             }catch{}
                         }
                     }catch{}
