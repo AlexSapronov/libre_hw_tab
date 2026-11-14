@@ -31,7 +31,7 @@ public class StandbyLayoutTest {
         DashboardLayout layout=new DashboardLayout();assertTrue(layout.valid(false));assertTrue(layout.valid(true));
         layout.positions.put("overview.cpu",new RectF(36,125,300,400));layout.disabledMetrics.add("power");layout.hidden.add("overview.side");
         DashboardLayout copy=DashboardLayout.parse(layout.json());assertEquals(264,copy.rect("cpu",false).width(),.01);assertFalse(copy.metric("power"));assertFalse(copy.visible("side",false));
-        assertEquals(890,copy.rect("main",true).width(),.01);
+        assertEquals(436,copy.rect("main",true).width(),.01);
         layout.positions.put("overview.cpu",layout.rect("gpu",false));assertFalse(layout.valid(false));
         assertEquals(436,DashboardLayout.parse(layout.json()).rect("cpu",false).width(),.01);
     }
@@ -39,7 +39,7 @@ public class StandbyLayoutTest {
         DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;
         view.accept(DemoData.sample(),"",true);view.themeId=6;view.mode=1;render(view,"nerv-overview");
         view.mode=2;render(view,"nerv-game");view.editing=true;render(view,"editor-nerv");
-        view.layout.hidden.add("game.memory");view.layout.positions.put("game.main",new RectF(36,125,800,420));
+        view.layout.hidden.add("game.memory");view.layout.hidden.add("game.audio");view.layout.positions.put("game.main",new RectF(36,125,800,420));
         view.layout.positions.put("game.history",new RectF(36,443,926,690));render(view,"editor-custom");
         assertTrue(view.layout.valid(true));
     }

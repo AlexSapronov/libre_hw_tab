@@ -35,6 +35,8 @@ builder.Services.AddSingleton<GamingService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GamingService>());
 builder.Services.AddSingleton<MediaService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MediaService>());
+builder.Services.AddSingleton<AudioService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AudioService>());
 var app = builder.Build();
 app.Use(async (context, next) =>
 {
@@ -48,10 +50,14 @@ app.Use(async (context, next) =>
     }
     await next(context);
 });
-app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming, MediaService media) => telemetry.Snapshot is { } snapshot
-    ? Results.Json(snapshot with { Game = gaming.Current, WakeTargets = NetworkWake.Targets.Value, Media = media.Current }) : Results.StatusCode(503));
+app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming, MediaService media, AudioService audio) => telemetry.Snapshot is { } snapshot
+    ? Results.Json(snapshot with { Game = gaming.Current, WakeTargets = NetworkWake.Targets.Value, Media = media.Current, Audio = audio.Current }) : Results.StatusCode(503));
 app.MapGet("/api/v1/media/{id}/thumbnail", IResult (string id,MediaService media)=>media.Thumbnail(id) is {} image?Results.Bytes(image,"image/jpeg"):Results.NotFound());
 app.MapPost("/api/v1/media/control", async Task<IResult> (MediaCommand command,MediaService media)=>await media.Control(command)?Results.Ok():Results.Conflict());
+app.MapPost("/api/v1/audio/control", IResult (AudioCommand command,AudioService audio)=> {
+    try{return audio.Control(command) is {} result?Results.Json(result):Results.Conflict();}
+    catch{return Results.StatusCode(503);}
+});
 Console.WriteLine("LIBRE HW TAB — Windows companion");
 Console.WriteLine("Enter an address and the pairing key in the tablet app:");
 foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
@@ -63,7 +69,7 @@ await app.RunAsync();
 
 record Connection(int Port, string Token);
 record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total, float? Pump = null, float? SideFan = null, string? FanName = null, string? PumpName = null, bool CoolingProfile = false, float? UsableTotal = null);
-record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null, WakeTarget[]? WakeTargets = null, MediaView? Media = null);
+record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null, WakeTarget[]? WakeTargets = null, MediaView? Media = null, AudioView? Audio = null);
 sealed class Telemetry : BackgroundService
 {
     private Snapshot? snapshot;

@@ -5,7 +5,7 @@ import java.util.*;
 
 final class DashboardLayout {
     static final String[] OVERVIEW={"cpu","gpu","memory","history","side"};
-    static final String[] GAME={"main","memory","history","side"};
+    static final String[] GAME={"main","audio","memory","history","side"};
     final Map<String,RectF> positions=new HashMap<>();
     final Set<String> hidden=new HashSet<>(),disabledMetrics=new HashSet<>();
     static String[] keys(boolean game){return game?GAME:OVERVIEW;}
@@ -13,10 +13,11 @@ final class DashboardLayout {
         switch(key){
             case "cpu":return new RectF(36,125,472,475);
             case "gpu":return new RectF(490,125,926,475);
-            case "main":return new RectF(36,125,926,425);
+            case "main":return new RectF(36,125,472,475);
+            case "audio":return new RectF(490,125,926,475);
             case "side":return new RectF(944,125,1164,690);
-            case "memory":return new RectF(36,game?443:493,306,690);
-            default:return new RectF(324,game?443:493,926,690);
+            case "memory":return new RectF(36,493,306,690);
+            default:return new RectF(324,493,926,690);
         }
     }
     static String id(String key,boolean game){return (game?"game.":"overview.")+key;}
@@ -37,13 +38,13 @@ final class DashboardLayout {
         try {
             JSONObject root=new JSONObject(),items=new JSONObject();
             for(Map.Entry<String,RectF> e:positions.entrySet()){RectF r=e.getValue();items.put(e.getKey(),new JSONArray(new double[]{r.left,r.top,r.right,r.bottom}));}
-            return root.put("version",1).put("positions",items).put("hidden",new JSONArray(hidden)).put("disabled",new JSONArray(disabledMetrics)).toString();
+            return root.put("version",2).put("positions",items).put("hidden",new JSONArray(hidden)).put("disabled",new JSONArray(disabledMetrics)).toString();
         }catch(JSONException ex){throw new IllegalStateException(ex);}
     }
     static DashboardLayout parse(String value){
         DashboardLayout result=new DashboardLayout();
         try {
-            JSONObject root=new JSONObject(value);if(root.optInt("version")!=1)return result;
+            JSONObject root=new JSONObject(value);int version=root.optInt("version");if(version!=1 && version!=2)return result;
             JSONObject items=root.optJSONObject("positions");
             for(boolean game:new boolean[]{false,true})for(String key:keys(game)){
                 String id=id(key,game);JSONArray a=items==null?null:items.optJSONArray(id);
@@ -52,6 +53,8 @@ final class DashboardLayout {
             JSONArray hidden=root.optJSONArray("hidden"),disabled=root.optJSONArray("disabled");
             if(hidden!=null)for(int i=0;i<hidden.length();i++)result.hidden.add(hidden.getString(i));
             if(disabled!=null)for(int i=0;i<disabled.length();i++)result.disabledMetrics.add(disabled.getString(i));
+            // Preserve overview/visibility/metric choices; only incompatible old game geometry is reset.
+            if(version==1 && !result.valid(true))for(String key:GAME)result.positions.remove(id(key,true));
             if(!result.valid(false)||!result.valid(true))return new DashboardLayout();
         }catch(Exception ignored){return new DashboardLayout();}
         return result;
