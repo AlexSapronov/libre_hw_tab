@@ -154,23 +154,34 @@ public final class DashboardView extends View {
     private float padding(float w,float h){return bounded(Math.min(w,h)*.075f,12,24);}
     private void cardTitle(Canvas c,String label,float w,float h){float pad=padding(w,h);fit(c,label,pad,pad+12,h<160?10:12,w-pad*2,accent);}
     private void metric(Canvas c,String title,String value,String unit,RectF area,int color) {
-        float font=bounded(area.height()*.47f,18,46);fit(c,title,area.left,area.top+11,10,area.width(),muted);
-        fit(c,value,area.left,area.top+15+font,font,area.width(),color);
+        float font=bounded(area.height()*.47f,14,46);fit(c,title,area.left,area.top+11,10,area.width(),muted);
+        fit(c,value,area.left,Math.min(area.bottom-2,area.top+15+font),font,area.width(),color);
         if(!unit.isEmpty() && area.height()>65)fit(c,unit,area.left,area.bottom-2,10,area.width(),muted);
     }
     private void gamePanel(Canvas c,float w,float h) {
-        float pad=padding(w,h),body=h<155?33:78;JSONObject game=object("game");
+        float pad=padding(w,h),body=h<155?33:h<220?65:78;JSONObject game=object("game");
         cardTitle(c,w<350?"01 / GAME":"01 / GAME TELEMETRY",w,h);
-        if(h>=155)fit(c,game==null?"Ожидание игры":game.isNull("name")?"Ожидание игры":game.optString("name"),pad,60,h<240?20:25,w-pad*2,white);
-        boolean wide=w>=540;float heroWidth=wide?(w-pad*3)*.34f:w-pad*2;
-        float heroHeight=wide?h-body-pad:(h>=220?87:48);
+        if(h>=155)fit(c,game==null?"Ожидание игры":game.isNull("name")?"Ожидание игры":game.optString("name"),pad,h<220?50:60,h<240?20:25,w-pad*2,white);
+        if(h<155) {
+            if(layout.metric("fps"))fit(c,number(value(game,"fps"))+" FPS",pad,pad+49,32,w-pad*2,white);
+            String[] smallKeys={"low1","low01","frameTime"},smallLabels={"1% LOW","0,1% LOW","мс"};
+            int count=0;for(String key:smallKeys)if(layout.metric(key))count++;
+            int column=0;float cw=(w-pad*2)/Math.max(1,count);
+            for(int i=0;i<3;i++)if(layout.metric(smallKeys[i])) {
+                float x=pad+column++*cw;fit(c,smallLabels[i],x,h-28,9,cw-6,muted);
+                fit(c,i==2?decimal(value(game,smallKeys[i])):number(value(game,smallKeys[i])),x,h-12,16,cw-6,white);
+            }
+            return;
+        }
+        boolean wide=w>=540,showFps=layout.metric("fps");float heroWidth=showFps?(wide?(w-pad*3)*.34f:w-pad*2):0;
+        float heroHeight=wide?h-body-pad:(h>=220?87:42);
         float fpsSize=bounded(Math.min(heroWidth*.64f,heroHeight*.78f),30,148);
         if(layout.metric("fps")) {
             fit(c,number(value(game,"fps")),pad,body+fpsSize,fpsSize,heroWidth,white);
             if(heroHeight>=75)text(c,"PRESENTED FPS",pad,body+fpsSize+21,11,accent,medium);
         }
         java.util.ArrayList<String> keys=new java.util.ArrayList<>();for(String key:new String[]{"low1","low01","frameTime"})if(layout.metric(key))keys.add(key);
-        float statsX=wide?pad+heroWidth+pad:pad,statsY=wide?body:body+heroHeight+10;
+        float statsX=wide&&showFps?pad+heroWidth+pad:pad,statsY=wide||!showFps?body:body+heroHeight+10;
         float statsW=w-pad-statsX,statH=wide?70:Math.min(72,h-statsY-pad);
         for(int i=0;i<keys.size();i++) {
             String key=keys.get(i),label=key.equals("low1")?"1% LOW":key.equals("low01")?"0,1% LOW":"ВРЕМЯ КАДРА";
@@ -236,7 +247,7 @@ public final class DashboardView extends View {
         float pad=padding(w,h);boolean compact=h<190;cardTitle(c,compact?title:title.equals("CPU")?"01 / PROCESSOR":"02 / GRAPHICS",w,h);
         if(!compact)fit(c,data==null?"Ожидание датчика":data.optString("name","—"),pad,pad+46,20,w-pad*2,white);
         float body=compact?pad+25:pad+68,footer=h-pad-37;
-        float bodyH=Math.max(36,footer-body-10);boolean columns=w>=300 || compact;
+        float bodyH=Math.max(36,footer-body-10);boolean hasTemp=layout.metric("temperature"),hasLoad=layout.metric("load");boolean columns=hasTemp && hasLoad && (w>=300 || compact);
         float firstW=columns?(w-pad*3)*.61f:w-pad*2,loadX=columns?pad+firstW+pad:pad;
         float tempSize=bounded(Math.min(firstW*.65f,bodyH*.65f),25,84);
         if(layout.metric("temperature")) {
@@ -245,7 +256,7 @@ public final class DashboardView extends View {
         }
         if(layout.metric("load")) {
             float load=value(data,"load"),lw=columns?w-pad-loadX:w-pad*2;
-            float ly=columns?body:body+tempSize+35,lh=columns?bodyH:Math.max(40,footer-ly-8);
+            float ly=columns||!hasTemp?body:body+tempSize+35,lh=columns||!hasTemp?bodyH:Math.max(40,footer-ly-8);
             if(nerv || lw<105 || lh<90) {
                 float size=bounded(Math.min(lw*.40f,lh*.48f),20,52);
                 fit(c,number(load)+"%",loadX,ly+size,size,lw,white);
@@ -261,8 +272,8 @@ public final class DashboardView extends View {
         }
         if(h>=135) {
             line(c,pad,footer-10,w-pad,footer-10,0xFF56313B,1);
-            if(layout.metric("clock"))metric(c,"ЧАСТОТА",number(value(data,"clock"))+" MHz","",new RectF(pad,footer,w/2-5,h-pad+2),white);
-            if(layout.metric("power"))metric(c,"МОЩНОСТЬ",number(value(data,"power"))+" W","",new RectF(w/2+5,footer,w-pad,h-pad+2),white);
+            if(layout.metric("clock"))metric(c,"ЧАСТОТА",number(value(data,"clock"))+" MHz","",new RectF(pad,footer,layout.metric("power")?w/2-5:w-pad,h-pad+2),white);
+            if(layout.metric("power"))metric(c,"МОЩНОСТЬ",number(value(data,"power"))+" W","",new RectF(layout.metric("clock")?w/2+5:pad,footer,w-pad,h-pad+2),white);
         }
     }
     private void gameHardware(Canvas c,float w,float h) {
@@ -278,13 +289,15 @@ public final class DashboardView extends View {
         float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.28f),24,68);
         text(c,title,r.left,r.top+12,12,color,medium);
         if(compact) {
-            fit(c,number(temperature)+"°C / "+number(load)+"%",r.left,r.top+40,24,r.width(),white);
-            if(r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
+            String values=(layout.metric("temperature")?number(temperature)+"°C":"")+(layout.metric("temperature")&&layout.metric("load")?" / ":"")+(layout.metric("load")?number(load)+"%":"");
+            if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-2),14,r.width(),color);return;}
+            fit(c,values,r.left,r.top+40,24,r.width(),white);
+            if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
         float baseline=r.top+tempSize+27;
         if(layout.metric("temperature")){fit(c,number(temperature)+"°C",r.left,baseline,tempSize,r.width(),white);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
         if(layout.metric("load")) {
-            float barY=r.top+r.height()*.73f;
+            float barY=layout.metric("temperature")?r.top+r.height()*.73f:r.top+65;
             text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
             if(nerv)nervSegments(c,r.left,barY,r.width(),18,load,color,18);
             else {box(c,r.left,barY,r.width(),7,0xFF263446);if(Float.isFinite(load))box(c,r.left,barY,r.width()*Math.max(0,Math.min(1,load/100)),7,color);}
@@ -293,14 +306,15 @@ public final class DashboardView extends View {
     }
     private void cooling(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,"04 / COOLING",w,h);JSONObject cpu=object("cpu"),gpu=object("gpu");
-        String[] keys={"fan","sideFan","pump","gpuFan"},labels={"ВЕРХ / AIO","БОК / ВДУВ","ПОМПА","GPU / FAN"},sources={"Fan #1","Fan #2","Fan #7","ВИДЕОКАРТА"};
+        boolean profile=cpu!=null&&cpu.optBoolean("coolingProfile");
+        String[] keys={"fan","sideFan","pump","gpuFan"},labels={profile?"ВЕРХ / AIO":"CPU / AIO","БОК / ВДУВ","ПОМПА","GPU / FAN"},sources={profile?"Fan #1":sensorName(cpu,"fanName"),profile?"Fan #2":"КОРПУС",profile?"Fan #7":sensorName(cpu,"pumpName"),"ВИДЕОКАРТА"};
         java.util.ArrayList<Integer> rows=new java.util.ArrayList<>();for(int i=0;i<4;i++)if(layout.metric(keys[i]))rows.add(i);
         boolean columns=w>=400;int count=rows.size(),rowCount=columns?(count+1)/2:count;
         float top=pad+29,rh=(h-top-pad)/Math.max(1,rowCount),cw=columns?(w-pad*3)/2:w-pad*2;
         for(int n=0;n<count;n++) {
             int index=rows.get(n);float x=pad+(columns?n%2*(cw+pad):0),y=top+(columns?n/2:n)*rh;
             float rpm=value(index==3?gpu:cpu,keys[index].equals("gpuFan")?"fan":keys[index]);int color=index==3?secondary:accent;
-            if(rh<65){fit(c,labels[index]+"  "+number(rpm)+" RPM",x,y+Math.min(25,rh-3),14,cw,color);continue;}
+            if(rh<65){fit(c,labels[index]+"  "+number(rpm)+" RPM",x,y+Math.min(25,rh-3),bounded(rh*.55f,9,14),cw,color);continue;}
             fit(c,labels[index],x,y+12,11,cw,color);
             fit(c,number(rpm)+" RPM",x,y+bounded(rh*.56f,35,65),bounded(Math.min(cw*.21f,rh*.35f),20,44),cw,white);
             if(rh>90)fit(c,sources[index],x,y+rh-14,10,cw,muted);
