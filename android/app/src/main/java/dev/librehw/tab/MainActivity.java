@@ -42,8 +42,17 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private String editorPreviousLayout;
     private final Runnable alarmTick=new Runnable(){public void run(){if(active){updateAlarm();ui.postDelayed(this,30000);}}};
 
+    @Override protected void attachBaseContext(Context base){
+        String language=base.getSharedPreferences("connection",MODE_PRIVATE).getString("language","ru");
+        UiText.language(language);
+        android.content.res.Configuration config=new android.content.res.Configuration(base.getResources().getConfiguration());
+        config.setLocale(UiText.locale());
+        super.attachBaseContext(base.createConfigurationContext(config));
+    }
+    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putBoolean("demo",demo);}
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        demo=saved!=null && saved.getBoolean("demo",false);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         preferences = getSharedPreferences("connection", MODE_PRIVATE);
         address = preferences.getString("address", "");
@@ -102,12 +111,12 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void toggleTheme() {
         String[] labels = new String[DashboardTheme.ALL.length];
-        for(int i=0;i<labels.length;i++)labels[i]=DashboardTheme.ALL[i].description;
-        new AlertDialog.Builder(this).setTitle("Оформление")
+        for(int i=0;i<labels.length;i++)labels[i]=UiText.get(DashboardTheme.ALL[i].description);
+        new AlertDialog.Builder(this).setTitle(UiText.get("Оформление"))
             .setSingleChoiceItems(labels,dashboard.themeId,(dialog,which)->{
                 dashboard.themeId=which; preferences.edit().putInt("theme_id",which).apply();
                 dashboard.invalidate(); dialog.dismiss();
-            }).setNegativeButton("Закрыть",null).show();
+            }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void stop() {
         generation++;
@@ -130,7 +139,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void poll(int current) {
         JSONObject sample = null;
-        String message = "Укажи адрес компьютера в настройках";
+        String message = UiText.get("Укажи адрес компьютера в настройках");
         boolean demonstration = demo;
         HttpURLConnection request = null;
         try {
@@ -140,7 +149,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 synchronized (this) { if (current != generation) return; connection = request; }
                 sample = TelemetryClient.read(request);
             }
-        } catch (Exception ex) { sample = null; message = ex.getMessage() == null ? "Нет связи с ПК" : ex.getMessage(); }
+        } catch (Exception ex) { sample = null; message = ex.getMessage() == null ? UiText.get("Нет связи с ПК") : ex.getMessage(); }
         finally {
             if (request != null) request.disconnect();
             synchronized (this) { if (connection == request) connection = null; }
@@ -201,31 +210,31 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void settings() {
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(32, 12, 32, 12);
-        TextView info = new TextView(this); info.setText("На компьютере открой Pair.cmd. Нажми «Сканировать QR» и наведи камеру на код — адрес и ключ подставятся сами.\n\nРучной ввод можно использовать как запасной вариант."); layout.addView(info);
-        Button scan = new Button(this); scan.setText("Сканировать QR"); layout.addView(scan);
+        TextView info = new TextView(this); info.setText(UiText.get("На компьютере открой Pair.cmd. Нажми «Сканировать QR» и наведи камеру на код — адрес и ключ подставятся сами.\n\nРучной ввод можно использовать как запасной вариант.")); layout.addView(info);
+        Button scan = new Button(this); scan.setText(UiText.get("Сканировать QR")); layout.addView(scan);
         EditText host = field(layout, "http://192.168.1.10:8750", address, false);
-        EditText key = field(layout, "Ключ подключения", token, true);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Подключение к компьютеру").setView(layout)
-            .setPositiveButton("Подключить", null)
-            .setNeutralButton("Демо", (d, w) -> { demo = true; dashboard.clear(); restart(); })
-            .setNegativeButton("Закрыть", null).create();
+        EditText key = field(layout, UiText.get("Ключ подключения"), token, true);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(UiText.get("Подключение к компьютеру")).setView(layout)
+            .setPositiveButton(UiText.get("Подключить"), null)
+            .setNeutralButton(UiText.get("Демо"), (d, w) -> { demo = true; dashboard.clear(); restart(); })
+            .setNegativeButton(UiText.get("Закрыть"), null).create();
         dialog.setOnShowListener(d -> dialog.getButton(-1).setOnClickListener(v -> {
             try {
                 String raw = host.getText().toString().trim();
                 if (!raw.contains("://")) raw = "http://" + raw;
                 URI uri = new URI(raw);
                 if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || !(uri.getPath().isEmpty() || uri.getPath().equals("/"))) throw new Exception();
-                if (key.getText().toString().trim().length() < 16) { key.setError("Вставь полный ключ из установщика"); return; }
+                if (key.getText().toString().trim().length() < 16) { key.setError(UiText.get("Вставь полный ключ из установщика")); return; }
                 address = raw.replaceAll("/+$", ""); token = key.getText().toString().trim(); demo = false;
                 preferences.edit().putString("address", address).putString("token", token).apply();
                 dashboard.clear(); restart(); dialog.dismiss();
-            } catch (Exception ex) { host.setError("Нужен адрес вида http://192.168.1.10:8750"); }
+            } catch (Exception ex) { host.setError(UiText.get("Нужен адрес вида http://192.168.1.10:8750")); }
         }));
         scan.setOnClickListener(v -> {
             dialog.dismiss();
             scanner.launch(new com.journeyapps.barcodescanner.ScanOptions()
                 .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
-                .setPrompt("Наведи камеру на QR в окне Libre HW Tab на компьютере")
+                .setPrompt(UiText.get("Наведи камеру на QR в окне Libre HW Tab на компьютере"))
                 .setOrientationLocked(false).setBeepEnabled(false));
         });
         dialog.show();
@@ -233,12 +242,12 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private void importPairing(String text) {
         final PairingInfo info;
         try { info = PairingInfo.parse(text); }
-        catch (Exception ex) { new AlertDialog.Builder(this).setTitle("QR не подходит").setMessage(ex.getMessage()).setPositiveButton("ОК",null).show(); return; }
+        catch (Exception ex) { new AlertDialog.Builder(this).setTitle(UiText.get("QR не подходит")).setMessage(ex.getMessage()).setPositiveButton(UiText.get("ОК"),null).show(); return; }
         final int attempt = ++pairingGeneration;
         if (pairingTask != null) pairingTask.cancel(true);
-        pairingDialog = new AlertDialog.Builder(this).setTitle("Подключаемся к ПК")
-            .setMessage("Проверяю адреса из QR. Ничего вводить не нужно…")
-            .setNegativeButton("Отмена", (d,w) -> cancelPairing()).create();
+        pairingDialog = new AlertDialog.Builder(this).setTitle(UiText.get("Подключаемся к ПК"))
+            .setMessage(UiText.get("Проверяю адреса из QR. Ничего вводить не нужно…"))
+            .setNegativeButton(UiText.get("Отмена"), (d,w) -> cancelPairing()).create();
         pairingDialog.setOnCancelListener(d -> cancelPairing());
         pairingDialog.show();
         pairingTask = pairingWorker.submit(() -> {
@@ -250,68 +259,79 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 if (isDestroyed() || attempt != pairingGeneration) return;
                 pairingDialog.dismiss(); pairingDialog = null;
                 if (host == null) {
-                    new AlertDialog.Builder(this).setTitle("Не удалось подключиться").setMessage(error)
-                        .setPositiveButton("Повторить", (d,w) -> importPairing(text)).setNegativeButton("Закрыть", null).show();
+                    new AlertDialog.Builder(this).setTitle(UiText.get("Не удалось подключиться")).setMessage(error)
+                        .setPositiveButton(UiText.get("Повторить"), (d,w) -> importPairing(text)).setNegativeButton(UiText.get("Закрыть"), null).show();
                     return;
                 }
                 address = host; token = info.token; demo = false;
                 preferences.edit().putString("address",address).putString("token",token).apply();
                 dashboard.clear(); restart();
-                Toast.makeText(this,"Подключено к компьютеру",Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,UiText.get("Подключено к компьютеру"),Toast.LENGTH_SHORT).show();
             });
         });
     }
     private void designDetail(){
-        new AlertDialog.Builder(this).setTitle("Насыщенность оформления")
-            .setSingleChoiceItems(DashboardView.DETAIL_LABELS,dashboard.detailLevel,(dialog,which)->{
+        new AlertDialog.Builder(this).setTitle(UiText.get("Насыщенность оформления"))
+            .setSingleChoiceItems(DashboardView.detailLabels(),dashboard.detailLevel,(dialog,which)->{
                 dashboard.detailLevel=which;preferences.edit().putInt("detail_level",which).apply();dashboard.invalidate();dialog.dismiss();
-            }).setNegativeButton("Закрыть",null).show();
+            }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void menu() {
         new AlertDialog.Builder(this).setTitle("Libre HW Tab")
-            .setItems(new String[]{"Экран ожидания","Редактор блоков","Погода: выбрать город","Будильник","Wake-on-LAN","Автоожидание: "+(dashboard.autoStandby?"вкл":"выкл"),"Анимации: "+(dashboard.animations?"вкл":"выкл"),"Подключение","Оформление: "+DashboardView.DETAIL_LABELS[dashboard.detailLevel]},(d,index)->{
+            .setItems(new String[]{UiText.get("Экран ожидания"),UiText.get("Редактор блоков"),UiText.get("Погода: выбрать город"),UiText.get("Будильник"),"Wake-on-LAN",UiText.get("Автоожидание: ")+(dashboard.autoStandby?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Анимации: ")+(dashboard.animations?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Подключение"),UiText.get("Оформление: ")+DashboardView.detailLabels()[dashboard.detailLevel],UiText.get("Язык / Language: ")+(UiText.language().equals("en")?"English":"Русский")},(d,index)->{
                 if(index==0){dashboard.forceStandby=true;dashboard.invalidate();}
-                else if(index==1)new AlertDialog.Builder(this).setTitle("Какой макет изменить?").setItems(new String[]{"Обзор","Игра"},(v,choice)->beginEditor(choice==1)).show();
+                else if(index==1)new AlertDialog.Builder(this).setTitle(UiText.get("Какой макет изменить?")).setItems(new String[]{UiText.get("Обзор"),UiText.get("Игра")},(v,choice)->beginEditor(choice==1)).show();
                 else if(index==2)weatherCity();else if(index==3)alarm();else if(index==4)wakeOptions();
                 else if(index==5){dashboard.autoStandby=!dashboard.autoStandby;preferences.edit().putBoolean("auto_standby",dashboard.autoStandby).apply();dashboard.invalidate();}
                 else if(index==8){designDetail();}
+                else if(index==9){language();}
                 else if(index==6){dashboard.animations=!dashboard.animations;preferences.edit().putBoolean("animations",dashboard.animations).apply();}
                 else settings();
-            }).setNegativeButton("Закрыть",null).show();
+            }).setNegativeButton(UiText.get("Закрыть"),null).show();
+    }
+    private void language(){
+        new AlertDialog.Builder(this).setTitle(UiText.get("Язык / Language"))
+            .setSingleChoiceItems(new String[]{"Русский","English"},UiText.language().equals("en")?1:0,(dialog,which)->{
+                String language=which==1?"en":"ru";
+                if(!language.equals(UiText.language())){
+                    preferences.edit().putString("language",language).apply();
+                    dialog.dismiss();recreate();
+                }else dialog.dismiss();
+            }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void beginEditor(boolean game) {
         editorPreviousMode=dashboard.mode;editorPreviousLayout=dashboard.layout.json();
         dashboard.forceStandby=false;dashboard.mode=game?2:1;dashboard.editing=true;dashboard.invalidate();
     }
     private void saveEditor() {
-        if(!dashboard.layout.valid(dashboard.playing())){Toast.makeText(this,"Блоки пересекаются или все скрыты. Раздвинь их перед сохранением.",Toast.LENGTH_LONG).show();return;}
+        if(!dashboard.layout.valid(dashboard.playing())){Toast.makeText(this,UiText.get("Блоки пересекаются или все скрыты. Раздвинь их перед сохранением."),Toast.LENGTH_LONG).show();return;}
         preferences.edit().putString("layout_v1",dashboard.layout.json()).apply();dashboard.editing=false;dashboard.mode=editorPreviousMode;dashboard.suppressStandby();
     }
     private void cancelEditor(){dashboard.layout=DashboardLayout.parse(editorPreviousLayout);dashboard.editing=false;dashboard.mode=editorPreviousMode;dashboard.suppressStandby();}
     private void editorOptions() {
-        new AlertDialog.Builder(this).setTitle("Редактор")
-            .setItems(new String[]{"Показать / скрыть блоки","Выбрать показатели","Сбросить оба макета"},(d,index)->{
+        new AlertDialog.Builder(this).setTitle(UiText.get("Редактор"))
+            .setItems(new String[]{UiText.get("Показать / скрыть блоки"),UiText.get("Выбрать показатели"),UiText.get("Сбросить оба макета")},(d,index)->{
                 if(index==0){
                     boolean game=dashboard.playing();String[] keys=DashboardLayout.keys(game);boolean[] checked=new boolean[keys.length];
                     for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.visible(keys[i],game);
-                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":keys[i].equals("audio")?"Микшер звука":keys[i].equals("network")?"Сеть: Download / Upload":"Охлаждение";
-                    new AlertDialog.Builder(this).setTitle("Видимые блоки").setMultiChoiceItems(labels,checked,(v,item,on)->{
+                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?UiText.get("Процессор"):keys[i].equals("gpu")?UiText.get("Видеокарта"):keys[i].equals("memory")?UiText.get("Память"):keys[i].equals("history")?UiText.get("График"):keys[i].equals("main")?UiText.get("Игровые показатели"):keys[i].equals("audio")?UiText.get("Микшер звука"):keys[i].equals("network")?UiText.get("Сеть: Download / Upload"):UiText.get("Охлаждение");
+                    new AlertDialog.Builder(this).setTitle(UiText.get("Видимые блоки")).setMultiChoiceItems(labels,checked,(v,item,on)->{
                         String key=DashboardLayout.id(keys[item],game);if(on)dashboard.layout.hidden.remove(key);else dashboard.layout.hidden.add(key);dashboard.invalidate();
-                    }).setPositiveButton("Готово",null).show();
+                    }).setPositiveButton(UiText.get("Готово"),null).show();
                 }else if(index==1){
                     String[] keys={"temperature","load","clock","power","fps","low1","low01","frameTime","memory","history","fan","sideFan","pump","gpuFan"};
-                    String[] labels={"Температура","Загрузка","Частота","Мощность","FPS","1% low","0,1% low","Время кадра","Память","График","Верх / AIO","Боковые вентиляторы","Помпа","Вентилятор GPU"};
+                    String[] labels={UiText.get("Температура"),UiText.get("Загрузка"),UiText.get("Частота"),UiText.get("Мощность"),"FPS","1% low",UiText.get("0,1% low"),UiText.get("Время кадра"),UiText.get("Память"),UiText.get("График"),UiText.get("Верх / AIO"),UiText.get("Боковые вентиляторы"),UiText.get("Помпа"),UiText.get("Вентилятор GPU")};
                     boolean[] checked=new boolean[keys.length];for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.metric(keys[i]);
-                    new AlertDialog.Builder(this).setTitle("Показатели").setMultiChoiceItems(labels,checked,(v,item,on)->{
+                    new AlertDialog.Builder(this).setTitle(UiText.get("Показатели")).setMultiChoiceItems(labels,checked,(v,item,on)->{
                         if(on)dashboard.layout.disabledMetrics.remove(keys[item]);else dashboard.layout.disabledMetrics.add(keys[item]);dashboard.invalidate();
-                    }).setPositiveButton("Готово",null).show();
+                    }).setPositiveButton(UiText.get("Готово"),null).show();
                 }else{dashboard.layout=new DashboardLayout();dashboard.invalidate();}
             }).show();
     }
     private void updateAlarm() {
         android.app.AlarmManager manager=(android.app.AlarmManager)getSystemService(ALARM_SERVICE);
         android.app.AlarmManager.AlarmClockInfo next=manager.getNextAlarmClock();
-        dashboard.nextAlarm=next==null?"Будильник не задан":java.time.Instant.ofEpochMilli(next.getTriggerTime()).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, HH:mm",new java.util.Locale("ru")));
+        dashboard.nextAlarm=next==null?UiText.get("Будильник не задан"):java.time.Instant.ofEpochMilli(next.getTriggerTime()).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, HH:mm",UiText.locale()));
         dashboard.invalidate();
     }
     private void alarm() {
@@ -320,7 +340,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             Intent intent=new Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
                 .putExtra(android.provider.AlarmClock.EXTRA_HOUR,hour).putExtra(android.provider.AlarmClock.EXTRA_MINUTES,minute)
                 .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE,"Libre HW Tab").putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI,false);
-            try{startActivity(intent);}catch(ActivityNotFoundException ex){Toast.makeText(this,"На планшете не найдено приложение Часы",Toast.LENGTH_LONG).show();}
+            try{startActivity(intent);}catch(ActivityNotFoundException ex){Toast.makeText(this,UiText.get("На планшете не найдено приложение Часы"),Toast.LENGTH_LONG).show();}
         },now.getHour(),now.getMinute(),true).show();
     }
     protected boolean weatherEnabled(){return true;}
@@ -337,58 +357,58 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             if(!city.equals(preferences.getString("weather_city","Санкт-Петербург")))return;
             nextWeatherAttempt=0;
             preferences.edit().putString("weather_cache",data.toString()).putString("weather_zone",data.optString("forecastZone",preferences.getString("weather_zone","Europe/Moscow"))).apply();
-            ui.post(()->{if(!isDestroyed()){dashboard.weather=data;weatherError="";dashboard.weatherHint="Нажми, чтобы обновить";dashboard.invalidate();}});
+            ui.post(()->{if(!isDestroyed()){dashboard.weather=data;weatherError="";dashboard.weatherHint=UiText.get("Нажми, чтобы обновить");dashboard.invalidate();}});
         }catch(Exception ex){
             nextWeatherAttempt=android.os.SystemClock.elapsedRealtime()+30000;
             String reason=WeatherClient.reason(ex);
-            ui.post(()->{if(!isDestroyed() && city.equals(preferences.getString("weather_city","Санкт-Петербург"))){weatherError=reason;dashboard.weatherStatus="Нет связи с погодой";dashboard.weatherHint="Повтор через 30 с · нажми для деталей";dashboard.invalidate();}});
+            ui.post(()->{if(!isDestroyed() && city.equals(preferences.getString("weather_city","Санкт-Петербург"))){weatherError=reason;dashboard.weatherStatus=UiText.get("Нет связи с погодой");dashboard.weatherHint=UiText.get("Повтор через 30 с · нажми для деталей");dashboard.invalidate();}});
         }
     }
     private void weatherActions() {
-        new AlertDialog.Builder(this).setTitle("Погода")
-            .setMessage(weatherError.isEmpty()?"Обновляется с планшета, даже когда ПК выключен.":weatherError)
-            .setPositiveButton("Обновить",(d,w)->requestWeather())
-            .setNeutralButton("Город",(d,w)->weatherCity()).setNegativeButton("Закрыть",null).show();
+        new AlertDialog.Builder(this).setTitle(UiText.get("Погода"))
+            .setMessage(weatherError.isEmpty()?UiText.get("Обновляется с планшета, даже когда ПК выключен."):weatherError)
+            .setPositiveButton(UiText.get("Обновить"),(d,w)->requestWeather())
+            .setNeutralButton(UiText.get("Город"),(d,w)->weatherCity()).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void requestWeather() {
         if(extras==null||extras.isShutdown())return;
         dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
-        forceWeather=true;nextWeatherAttempt=0;dashboard.weatherStatus="Погода загружается…";dashboard.weatherHint="Запрашиваю данные…";dashboard.invalidate();
+        forceWeather=true;nextWeatherAttempt=0;dashboard.weatherStatus=UiText.get("Погода загружается…");dashboard.weatherHint=UiText.get("Запрашиваю данные…");dashboard.invalidate();
         extras.submit(this::refreshWeather);
     }
     private void weatherCity() {
         EditText city=new EditText(this);city.setSingleLine();city.setText(preferences.getString("weather_city","Санкт-Петербург"));
-        new AlertDialog.Builder(this).setTitle("Город для погоды").setView(city).setPositiveButton("Найти",(dialog,w)->{
+        new AlertDialog.Builder(this).setTitle(UiText.get("Город для погоды")).setView(city).setPositiveButton(UiText.get("Найти"),(dialog,w)->{
             String query=city.getText().toString().trim();if(query.length()<2)return;
-            Toast.makeText(this,"Поиск города…",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,UiText.get("Поиск города…"),Toast.LENGTH_SHORT).show();
             pairingWorker.submit(()->{
                 try {
                     JSONArray cities=WeatherClient.cities(query);String[] names=new String[cities.length()];
                     for(int i=0;i<names.length;i++){JSONObject item=cities.getJSONObject(i);names[i]=item.getString("name")+", "+item.optString("admin1")+", "+item.optString("country");}
-                    ui.post(()->{if(!active)return;if(names.length==0){Toast.makeText(this,"Город не найден",Toast.LENGTH_LONG).show();return;}
-                        new AlertDialog.Builder(this).setTitle("Выбери город").setItems(names,(v,index)->{
-                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).putString("weather_zone",selected.optString("timezone",java.time.ZoneId.systemDefault().getId())).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus="Погода загружается…";requestWeather();}catch(Exception ignored){}
+                    ui.post(()->{if(!active)return;if(names.length==0){Toast.makeText(this,UiText.get("Город не найден"),Toast.LENGTH_LONG).show();return;}
+                        new AlertDialog.Builder(this).setTitle(UiText.get("Выбери город")).setItems(names,(v,index)->{
+                            try{JSONObject selected=cities.getJSONObject(index);preferences.edit().putString("weather_city",selected.getString("name")).putString("weather_lat",Double.toString(selected.getDouble("latitude"))).putString("weather_lon",Double.toString(selected.getDouble("longitude"))).putString("weather_zone",selected.optString("timezone",java.time.ZoneId.systemDefault().getId())).remove("weather_cache").apply();dashboard.weather=null;dashboard.weatherStatus=UiText.get("Погода загружается…");requestWeather();}catch(Exception ignored){}
                         }).show();
                     });
-                }catch(Exception ex){ui.post(()->Toast.makeText(this,"Поиск недоступен. Проверь интернет планшета.",Toast.LENGTH_LONG).show());}
+                }catch(Exception ex){ui.post(()->Toast.makeText(this,UiText.get("Поиск недоступен. Проверь интернет планшета."),Toast.LENGTH_LONG).show());}
             });
-        }).setNeutralButton("Open-Meteo",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://open-meteo.com/")));}catch(ActivityNotFoundException ignored){}}).setNegativeButton("Отмена",null).show();
+        }).setNeutralButton("Open-Meteo",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://open-meteo.com/")));}catch(ActivityNotFoundException ignored){}}).setNegativeButton(UiText.get("Отмена"),null).show();
     }
     private void wake() {
         long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;dashboard.wakeSentUntil=now+10000;dashboard.invalidate();
         pairingWorker.submit(()->{
-            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->{dashboard.forceStandby=false;dashboard.invalidate();Toast.makeText(this,"Команда отправлена. Жду подключения к ПК…",Toast.LENGTH_LONG).show();});}
+            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->{dashboard.forceStandby=false;dashboard.invalidate();Toast.makeText(this,UiText.get("Команда отправлена. Жду подключения к ПК…"),Toast.LENGTH_LONG).show();});}
             catch(Exception ex){ui.post(()->{lastWake=0;dashboard.wakeSentUntil=0;dashboard.invalidate();Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show();});}
         });
     }
     private void wakeOptions() {
         new AlertDialog.Builder(this).setTitle("Wake-on-LAN")
-            .setMessage("Пробуждение требует включённого Wake-on-LAN в BIOS и настройках сетевой карты. Из полного выключения поддержка зависит от платы. ПК должен быть подключён к питанию; надёжнее Ethernet. Команда отправляется только по домашней сети.")
-            .setPositiveButton("Отправить команду",(d,w)->wake()).setNeutralButton("Указать MAC",(d,w)->{
+            .setMessage(UiText.get("Пробуждение требует включённого Wake-on-LAN в BIOS и настройках сетевой карты. Из полного выключения поддержка зависит от платы. ПК должен быть подключён к питанию; надёжнее Ethernet. Команда отправляется только по домашней сети."))
+            .setPositiveButton(UiText.get("Отправить команду"),(d,w)->wake()).setNeutralButton(UiText.get("Указать MAC"),(d,w)->{
                 EditText mac=new EditText(this);mac.setSingleLine();mac.setHint("AA:BB:CC:DD:EE:FF");
-                AlertDialog input=new AlertDialog.Builder(this).setTitle("MAC сетевой карты ПК").setView(mac).setPositiveButton("Сохранить",null).setNegativeButton("Отмена",null).create();
+                AlertDialog input=new AlertDialog.Builder(this).setTitle(UiText.get("MAC сетевой карты ПК")).setView(mac).setPositiveButton(UiText.get("Сохранить"),null).setNegativeButton(UiText.get("Отмена"),null).create();
                 input.setOnShowListener(v->input.getButton(-1).setOnClickListener(b->{try{WakeClient.packet(mac.getText().toString());JSONArray targets=new JSONArray().put(new JSONObject().put("mac",mac.getText().toString()).put("broadcast","255.255.255.255"));preferences.edit().putString("wake_targets",targets.toString()).apply();input.dismiss();}catch(Exception ex){mac.setError(ex.getMessage());}}));input.show();
-            }).setNegativeButton("Закрыть",null).show();
+            }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {

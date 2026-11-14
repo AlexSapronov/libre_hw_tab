@@ -13,18 +13,18 @@ final class TelemetryClient {
     }
     static JSONObject read(HttpURLConnection request) throws Exception {
         int status = request.getResponseCode();
-        if (status == 401) throw new IOException("Неверный ключ подключения");
-        if (status != 200) throw new IOException("Агент: HTTP " + status);
+        if (status == 401) throw new IOException(UiText.get("Неверный ключ подключения"));
+        if (status != 200) throw new IOException(UiText.get("Агент: HTTP ") + status);
         try (InputStream input=request.getInputStream(); ByteArrayOutputStream output=new ByteArrayOutputStream()) {
             byte[] buffer=new byte[4096]; int count;
             while ((count=input.read(buffer)) != -1) {
-                if (output.size()+count > 65536) throw new IOException("Слишком большой ответ агента");
+                if (output.size()+count > 65536) throw new IOException(UiText.get("Слишком большой ответ агента"));
                 output.write(buffer,0,count);
             }
             JSONObject sample=new JSONObject(output.toString("UTF-8"));
-            if (sample.optInt("version") != 1 || !sample.has("timestamp")) throw new IOException("Несовместимая версия агента");
+            if (sample.optInt("version") != 1 || !sample.has("timestamp")) throw new IOException(UiText.get("Несовместимая версия агента"));
             long age=Math.abs(java.time.Duration.between(java.time.Instant.parse(sample.getString("timestamp")),java.time.Instant.now()).getSeconds());
-            if (age > 10) throw new IOException("Данные устарели. Проверь часы ПК и планшета");
+            if (age > 10) throw new IOException(UiText.get("Данные устарели. Проверь часы ПК и планшета"));
             return sample;
         }
     }

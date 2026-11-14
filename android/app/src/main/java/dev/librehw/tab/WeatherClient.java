@@ -11,13 +11,13 @@ final class WeatherClient {
         try {
             int status=c.getResponseCode();if(status!=200)throw new IOException("HTTP "+status);
             try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()) {
-                byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>131072)throw new IOException("Слишком большой ответ");out.write(b,0,n);}
+                byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>131072)throw new IOException(UiText.get("Слишком большой ответ"));out.write(b,0,n);}
                 return new JSONObject(out.toString("UTF-8"));
             }
         }finally{c.disconnect();}
     }
     static JSONArray cities(String query) throws Exception {
-        JSONObject data=request("https://geocoding-api.open-meteo.com/v1/search?count=5&language=ru&name="+URLEncoder.encode(query,"UTF-8"));
+        JSONObject data=request("https://geocoding-api.open-meteo.com/v1/search?count=5&language="+UiText.language()+"&name="+URLEncoder.encode(query,"UTF-8"));
         JSONArray result=data.optJSONArray("results");return result==null?new JSONArray():result;
     }
     interface Transport { JSONObject get(String url) throws Exception; }
@@ -47,8 +47,9 @@ final class WeatherClient {
             JSONObject current=data.getJSONArray("current_condition").getJSONObject(0);
             JSONArray descriptions=current.optJSONArray("lang_ru");
             if(descriptions==null||descriptions.length()==0)descriptions=current.optJSONArray("weatherDesc");
-            String summary=descriptions==null||descriptions.length()==0?"Текущая погода":descriptions.getJSONObject(0).optString("value","Текущая погода");
+            String summary=descriptions==null||descriptions.length()==0?UiText.get("Текущая погода"):descriptions.getJSONObject(0).optString("value",UiText.get("Текущая погода"));
             JSONObject result=result(city,current.getDouble("temp_C"),summary,"wttr.in").put("forecastZone",zone);
+            bilingualSummary(result,current);
             try{wttrForecast(result,data);}catch(Exception ignored){}
             return result;
         }catch(Exception fallback){throw new IOException("Open-Meteo: "+reason(primary)+"\nwttr.in: "+reason(fallback));}
@@ -62,7 +63,7 @@ final class WeatherClient {
             double temperature=hourly.getJSONArray("temperature_2m").getDouble(i);
             if(!Double.isFinite(temperature)||temperature< -100||temperature>70)continue;
             JSONObject slot=new JSONObject().put("date",time.toLocalDate().toString()).put("hour",hour).put("temperature",temperature)
-                .put("summary",description(hourly.getJSONArray("weather_code").getInt(i)));
+                .put("code",hourly.getJSONArray("weather_code").getInt(i)).put("summary",description(hourly.getJSONArray("weather_code").getInt(i)));
             optionalNumber(slot,"probability",hourly.optJSONArray("precipitation_probability"),i,100);
             optionalNumber(slot,"precipitation",hourly.optJSONArray("precipitation"),i,1000);
             slot.put("precipitationHours",1);slots.put(slot);
@@ -80,7 +81,8 @@ final class WeatherClient {
                 double temperature=item.getDouble("tempC");if(!Double.isFinite(temperature)||temperature< -100||temperature>70)continue;
                 JSONArray descriptions=item.optJSONArray("lang_ru");if(descriptions==null||descriptions.length()==0)descriptions=item.optJSONArray("weatherDesc");
                 JSONObject slot=new JSONObject().put("date",date).put("hour",time/100).put("temperature",temperature)
-                    .put("summary",descriptions==null||descriptions.length()==0?"Нет данных":descriptions.getJSONObject(0).optString("value","Нет данных"));
+                    .put("summary",descriptions==null||descriptions.length()==0?UiText.get("Нет данных"):descriptions.getJSONObject(0).optString("value",UiText.get("Нет данных")));
+                bilingualSummary(slot,item);
                 double rain=item.optDouble("chanceofrain",Double.NaN),snow=item.optDouble("chanceofsnow",Double.NaN);
                 double chance=Double.isFinite(rain)&&Double.isFinite(snow)?Math.max(rain,snow):Double.isFinite(rain)?rain:snow;
                 if(Double.isFinite(chance)&&chance>=0&&chance<=100)slot.put("probability",chance);
@@ -112,8 +114,8 @@ final class WeatherClient {
         return selected;
     }
     static String dayLabel(String date,java.time.LocalDate today) {
-        if(today.toString().equals(date))return "СЕГОДНЯ";
-        if(today.plusDays(1).toString().equals(date))return "ЗАВТРА";
+        if(today.toString().equals(date))return UiText.get("СЕГОДНЯ");
+        if(today.plusDays(1).toString().equals(date))return UiText.get("ЗАВТРА");
         try{return java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"));}catch(Exception ignored){return "";}
     }
     private static void optionalNumber(JSONObject slot,String key,JSONArray values,int index,double maximum) throws Exception {
@@ -121,19 +123,33 @@ final class WeatherClient {
         if(Double.isFinite(value)&&value>=0&&value<=maximum)slot.put(key,value);
     }
     private static JSONObject result(String city,double temperature,String summary,String source) throws Exception {
-        if(!Double.isFinite(temperature)||temperature< -100||temperature>70)throw new IOException("Некорректная температура");
+        if(!Double.isFinite(temperature)||temperature< -100||temperature>70)throw new IOException(UiText.get("Некорректная температура"));
         return new JSONObject().put("city",city).put("temperature",temperature).put("summary",summary.substring(0,Math.min(100,summary.length()))).put("source",source).put("forecastVersion",2).put("fetched",System.currentTimeMillis());
     }
     static String reason(Exception ex) {
-        if(ex instanceof UnknownHostException)return "не удалось найти сервер (DNS)";
-        if(ex instanceof SocketTimeoutException)return "сервер не ответил вовремя";
-        if(ex instanceof javax.net.ssl.SSLException)return "ошибка защищённого соединения (TLS)";
-        if(ex instanceof JSONException)return "неожиданный ответ сервиса";
-        String message=ex.getMessage();return message==null?"ошибка сети":message.substring(0,Math.min(240,message.length()));
+        if(ex instanceof UnknownHostException)return UiText.get("не удалось найти сервер (DNS)");
+        if(ex instanceof SocketTimeoutException)return UiText.get("сервер не ответил вовремя");
+        if(ex instanceof javax.net.ssl.SSLException)return UiText.get("ошибка защищённого соединения (TLS)");
+        if(ex instanceof JSONException)return UiText.get("неожиданный ответ сервиса");
+        String message=ex.getMessage();return message==null?UiText.get("ошибка сети"):message.substring(0,Math.min(240,message.length()));
+    }
+    private static void bilingualSummary(JSONObject target,JSONObject source) throws Exception {
+        JSONArray en=source.optJSONArray("weatherDesc"),ru=source.optJSONArray("lang_ru");
+        if(en!=null && en.length()>0)target.put("summary_en",en.getJSONObject(0).optString("value",""));
+        if(ru!=null && ru.length()>0)target.put("summary_ru",ru.getJSONObject(0).optString("value",""));
+    }
+    static String summary(JSONObject data){
+        if(data.has("code"))return description(data.optInt("code",-1));
+        String localized=data.optString("summary_"+UiText.language(),"");
+        if(!localized.isEmpty())return localized;
+        String cached=UiText.get(data.optString("summary",UiText.get("Нет данных")));
+        // Old Russian fallback caches have no English description; don't display Russian in English UI.
+        if(UiText.language().equals("en") && cached.matches(".*[А-Яа-яЁё].*"))return "Weather data";
+        return cached;
     }
     static String description(int code) {
-        if(code==0)return "Ясно";if(code>=1&&code<=3)return "Облачно";if(code==45||code==48)return "Туман";
-        if(code>=51&&code<=57)return "Морось";if(code>=61&&code<=67)return "Дождь";if(code>=71&&code<=77)return "Снег";
-        if(code>=80&&code<=82)return "Ливень";if(code==85||code==86)return "Снегопад";if(code>=95&&code<=99)return "Гроза";return "Нет данных";
+        if(code==0)return UiText.get("Ясно");if(code>=1&&code<=3)return UiText.get("Облачно");if(code==45||code==48)return UiText.get("Туман");
+        if(code>=51&&code<=57)return UiText.get("Морось");if(code>=61&&code<=67)return UiText.get("Дождь");if(code>=71&&code<=77)return UiText.get("Снег");
+        if(code>=80&&code<=82)return UiText.get("Ливень");if(code==85||code==86)return UiText.get("Снегопад");if(code>=95&&code<=99)return UiText.get("Гроза");return UiText.get("Нет данных");
     }
 }
