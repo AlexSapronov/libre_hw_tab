@@ -572,11 +572,26 @@ public class DashboardView extends View {
             int index=rows.get(n);float x=pad+(columns?n%2*(cw+pad):0),y=top+(columns?n/2:n)*rh;
             float rpm=value(index==3?gpu:cpu,keys[index].equals("gpuFan")?"fan":keys[index]);int color=index==3?secondary:accent;
             String trendKey=index==3?"gpu.fan":"cpu."+keys[index];
-            if(rh<65){fit(c,labels[index]+"  "+number(rpm)+" RPM",x,y+Math.min(22,rh-10),bounded(rh*.45f,9,14),cw,color);trend(c,trendKey,x,y+rh-8,cw,4,color,false);continue;}
+            boolean calibrated=index==3?gpu!=null&&gpu.optString("name").contains("5070 Ti"):profile;
+            float percent=calibrated?FanCalibration.percent(keys[index],rpm):Float.NaN;
+            boolean hasCurve=calibrated&&index!=2;
+            if(rh<65){
+                fit(c,labels[index]+"  "+number(rpm)+" RPM"+(hasCurve?" / ≈"+number(percent)+"%":""),x,y+Math.min(22,rh-10),bounded(rh*.45f,9,14),cw,color);
+                if(hasCurve)nervSegments(c,x,y+rh-10,cw,6,percent,color,20);
+                else trend(c,trendKey,x,y+rh-8,cw,4,color,false);
+                continue;
+            }
             fit(c,labels[index],x,y+12,11,cw,color);
-            valueWithUnit(c,number(rpm),x,y+bounded(rh*.56f,35,65),bounded(Math.min(cw*.21f,rh*.35f),20,44),"RPM",12,3,muted);
-            float plotTop=y+bounded(rh*.56f,35,65)+7;
-            trend(c,trendKey,x,plotTop,cw,y+rh-9-plotTop,color,true);
+            float baseline=y+bounded(rh*.56f,35,65);
+            // Keep the estimated percentage separate from the measured RPM.
+            fit(c,number(rpm)+" RPM",x,baseline,bounded(Math.min(cw*.14f,rh*.30f),17,34),hasCurve?cw*.68f:cw,white);
+            if(hasCurve){
+                p.setTextAlign(Paint.Align.RIGHT);fit(c,"≈"+number(percent)+"%",x+cw,baseline,18,cw*.30f,color);p.setTextAlign(Paint.Align.LEFT);
+                nervSegments(c,x,baseline+9,cw,Math.max(5,Math.min(18,y+rh-10-(baseline+9))),percent,color,24);
+                if(rh>140){trend(c,trendKey,x,baseline+40,cw,rh-110,color,true);}
+            }else{
+                float plotTop=baseline+7;trend(c,trendKey,x,plotTop,cw,y+rh-9-plotTop,color,true);
+            }
             if(n<count-1)line(c,x,y+rh-4,x+cw,y+rh-4,surface(0xFF56313B,55),1);
         }
     }
@@ -729,7 +744,7 @@ public class DashboardView extends View {
         float ratio=aspectRatio();c.scale(1/ratio,1);localCoordinates=true;
         drawingBlock=key;
         float w=target.width()*ratio,h=target.height();box(c,0,0,w,h,panel);panelFrame(c,w,h);
-        if(!editing && (key.equals("cpu")||key.equals("gpu")||key.equals("main")||key.equals("memory")||key.equals("history")))focusTargets.put(key,new RectF(target));
+        if(!editing && (key.equals("cpu")||key.equals("gpu")||key.equals("main")||key.equals("memory")||key.equals("history")||key.equals("side")||key.equals("network")))focusTargets.put(key,new RectF(target));
         switch(key) {
             case "main":gamePanel(c,w,h);break;
             case "audio":audioCard(c,w,h);break;
@@ -870,8 +885,13 @@ public class DashboardView extends View {
         drawingBlock=focusedMetric;
         box(c,0,0,w,h,panel);panelFrame(c,w,h);
         String key=focusedMetric;
-        cardTitle(c,"FOCUS / "+(key.equals("main")?"FPS":key.toUpperCase(Locale.ROOT))+UiText.get(" · ТАП — НАЗАД"),w,h);
-        if(key.equals("history")){c.save();c.translate(0,30);if(playing())frameGraph(c,w,h-30);else graph(c,w,h-30);c.restore();}
+        cardTitle(c,"FOCUS / "+(key.equals("main")?"FPS":key.equals("side")?"COOLING":key.toUpperCase(Locale.ROOT))+UiText.get(" · ТАП — НАЗАД"),w,h);
+        if(key.equals("side")||key.equals("network")){
+            c.save();c.translate(0,40);
+            if(key.equals("side"))cooling(c,w,h-40);else networkCard(c,w,h-40);
+            c.restore();
+        }
+        else if(key.equals("history")){c.save();c.translate(0,30);if(playing())frameGraph(c,w,h-30);else graph(c,w,h-30);c.restore();}
         else {
             boolean cpu=key.equals("cpu"),gpu=key.equals("gpu"),fps=key.equals("main");
             JSONObject data=object(fps?"game":key.equals("memory")?"memory":key);
