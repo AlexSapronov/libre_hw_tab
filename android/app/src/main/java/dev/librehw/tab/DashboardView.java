@@ -81,8 +81,9 @@ public class DashboardView extends View {
                 hit=new RectF(track.left-3,top,track.right+3,top+rowHeight);
             }else {
                 float y=top+rowHeight*.53f,muteWidth=bounded(w*.15f,48,64),right=w-pad-muteWidth-18;
-                fit(c,names[i],pad,top+12,12,right-pad-62,color);
-                p.setTextAlign(Paint.Align.RIGHT);fit(c,reading,right,top+12,14,60,available?white:muted);p.setTextAlign(Paint.Align.LEFT);
+                float labelRight=w<260?w-pad:right;
+                fit(c,names[i],pad,top+12,12,labelRight-pad-62,color);
+                p.setTextAlign(Paint.Align.RIGHT);fit(c,reading,labelRight,top+12,14,60,available?white:muted);p.setTextAlign(Paint.Align.LEFT);
                 track=new RectF(pad+4,y,right,y);
                 float hitHeight=Math.min(50,rowHeight*.66f);hit=new RectF(pad,Math.max(top+16,y-hitHeight/2),right+8,Math.min(top+rowHeight-2,y+hitHeight/2));
                 float bh=bounded(rowHeight*.54f,26,38);RectF mute=new RectF(w-pad-muteWidth,y-bh/2,w-pad,y+bh/2);
