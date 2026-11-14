@@ -14,6 +14,9 @@ public final class DashboardView extends View {
         final long time; final float[] values;
         ThermalPoint(long time,float cpu,float gpu,float cpuLoad,float gpuLoad,float memoryLoad){this.time=time;values=new float[]{cpu,gpu,cpuLoad,gpuLoad,memoryLoad};}
     }
+    private static final class FpsPoint {final long time;final float fps;FpsPoint(long time,float fps){this.time=time;this.fps=fps;}}
+    private final ArrayDeque<FpsPoint> fpsHistory=new ArrayDeque<>();
+    private String fpsSource="";
     private final ArrayDeque<ThermalPoint> history = new ArrayDeque<>();
     private JSONObject sample;
     private String error = "Ожидание подключения";
@@ -62,11 +65,15 @@ public final class DashboardView extends View {
         setContentDescription("Панель мониторинга ПК. Настройки и тема расположены вверху справа.");
         setFocusable(true);
     }
-    public void clear() { history.clear(); sample = null; error = "Подключение…"; invalidate(); }
+    public void clear() { history.clear();fpsHistory.clear();fpsSource=""; sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
         sample = data;mediaReceived=android.os.SystemClock.elapsedRealtime(); if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature"),value(object("cpu"),"load"),value(object("gpu"),"load"),value(object("memory"),"load")));
+        JSONObject game=object("game");String source=game==null?"":game.optString("sourceId",game.optString("name",""));
+        if(!source.equals(fpsSource)){fpsHistory.clear();fpsSource=source;}
+        fpsHistory.add(new FpsPoint(now,value(game,"fps")));
+        while(!fpsHistory.isEmpty()&&(now-fpsHistory.peekFirst().time>60000||fpsHistory.size()>180))fpsHistory.removeFirst();
         while (!history.isEmpty() && (now-history.peekFirst().time>180000 || history.size()>1000))history.removeFirst();
         invalidate();
     }
@@ -80,10 +87,12 @@ public final class DashboardView extends View {
     private void text(Canvas c, String text, float x, float y, float size, int color, Typeface font) {
         p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); p.setTypeface(nerv ? (font==medium?Typeface.create("monospace",Typeface.BOLD):Typeface.MONOSPACE) : font); p.setTextSize(size); c.drawText(text, x, y, p);
     }
-    private void fit(Canvas c, String text, float x, float y, float size, float width, int color) {
-        p.setTypeface(medium); p.setTextSize(size);
-        while (p.measureText(text) > width && size > 10) p.setTextSize(--size);
-        text(c, text, x, y, size, color, medium);
+    private void fit(Canvas c,String value,float x,float y,float size,float width,int color) {
+        if(width<=0)return;String label=value==null?"—":value;
+        p.setTypeface(nerv?Typeface.create("monospace",Typeface.BOLD):medium);p.setTextSize(size);
+        while(p.measureText(label)>width && size>10)p.setTextSize(--size);
+        if(p.measureText(label)>width){int end=p.breakText(label,true,Math.max(0,width-p.measureText("…")),null);label=label.substring(0,end)+"…";}
+        text(c,label,x,y,size,color,medium);
     }
     private void box(Canvas c, float x, float y, float w, float h, int color) {
         p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); if(!nerv)c.drawRoundRect(x,y,x+w,y+h,22,22,p);
@@ -121,14 +130,14 @@ public final class DashboardView extends View {
         String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "OFFLINE  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
         drawnCards.clear();
-        if(playing)drawBlock(c,"main",true,()->gamePanel(c));
+        if(playing)drawBlock(c,"main",true);
         else {
-            drawBlock(c,"cpu",false,()->device(c,36,"01","PROCESSOR",object("cpu"),accent,0));
-            drawBlock(c,"gpu",false,()->device(c,490,"02","GRAPHICS",object("gpu"),secondary,1));
+            drawBlock(c,"cpu",false);
+            drawBlock(c,"gpu",false);
         }
-        drawBlock(c,"side",playing,()->{if(playing)gameHardware(c);else cooling(c);});
-        if(layout.metric("memory"))drawBlock(c,"memory",playing,()->memory(c,playing));
-        if(layout.metric("history"))drawBlock(c,"history",playing,()->{if(playing)frameGraph(c);else graph(c);});
+        drawBlock(c,"side",playing);
+        if(layout.metric("memory"))drawBlock(c,"memory",playing);
+        if(layout.metric("history"))drawBlock(c,"history",playing);
         if(mediaVisible())drawMedia(c);
         if(editing)drawEditor(c,playing);
         finishAnimation(c,(playing?"game":"overview")+themeId);
@@ -141,16 +150,162 @@ public final class DashboardView extends View {
         box(c, r.left, r.top+7, r.width(), 40, 0xFF152131);
         text(c, label, r.left+14, r.top+33, 12, muted, medium);
     }
-    private void gamePanel(Canvas c) {
-        box(c,36,125,890,300,panel);
-        JSONObject game=object("game");
-        text(c,"01   /   GAME TELEMETRY",60,167,13,accent,medium);
-        fit(c,game==null ? "Ожидание игры / обнови Windows-агент" : game.isNull("name") ? "Ожидание игры" : game.optString("name","Ожидание игры"),60,204,25,842,white);
-        if(layout.metric("fps")){text(c,number(value(game,"fps")),60,337,118,white,digits);text(c,"PRESENTED FPS",64,365,12,accent,medium);}
-        if(layout.metric("low1")){text(c,"1% LOW · 10 С",430,246,10,muted,medium);text(c,number(value(game,"low1")),430,307,38,white,digits);text(c,"FPS",430,332,11,muted,medium);}
-        if(layout.metric("low01")){text(c,"0,1% LOW · 60 С",590,246,10,muted,medium);text(c,number(value(game,"low01")),590,307,38,white,digits);fit(c,low01Status(game),590,332,10,148,muted);}
-        if(layout.metric("frameTime")){text(c,"ВРЕМЯ КАДРА",750,246,10,muted,medium);text(c,decimal(value(game,"frameTime")),750,307,38,white,digits);text(c,"мс",750,332,11,muted,medium);}
-        if(game!=null && game.optBoolean("paused"))text(c,"ALT+TAB / ОЖИДАНИЕ КАДРОВ",446,365,11,muted,medium);
+    private static float bounded(float value,float min,float max){return Math.max(min,Math.min(max,value));}
+    private float padding(float w,float h){return bounded(Math.min(w,h)*.075f,12,24);}
+    private void cardTitle(Canvas c,String label,float w,float h){float pad=padding(w,h);fit(c,label,pad,pad+12,h<160?10:12,w-pad*2,accent);}
+    private void metric(Canvas c,String title,String value,String unit,RectF area,int color) {
+        float font=bounded(area.height()*.47f,18,46);fit(c,title,area.left,area.top+11,10,area.width(),muted);
+        fit(c,value,area.left,area.top+15+font,font,area.width(),color);
+        if(!unit.isEmpty() && area.height()>65)fit(c,unit,area.left,area.bottom-2,10,area.width(),muted);
+    }
+    private void gamePanel(Canvas c,float w,float h) {
+        float pad=padding(w,h),body=h<155?33:78;JSONObject game=object("game");
+        cardTitle(c,w<350?"01 / GAME":"01 / GAME TELEMETRY",w,h);
+        if(h>=155)fit(c,game==null?"Ожидание игры":game.isNull("name")?"Ожидание игры":game.optString("name"),pad,60,h<240?20:25,w-pad*2,white);
+        boolean wide=w>=540;float heroWidth=wide?(w-pad*3)*.34f:w-pad*2;
+        float heroHeight=wide?h-body-pad:(h>=220?87:48);
+        float fpsSize=bounded(Math.min(heroWidth*.64f,heroHeight*.78f),30,148);
+        if(layout.metric("fps")) {
+            fit(c,number(value(game,"fps")),pad,body+fpsSize,fpsSize,heroWidth,white);
+            if(heroHeight>=75)text(c,"PRESENTED FPS",pad,body+fpsSize+21,11,accent,medium);
+        }
+        java.util.ArrayList<String> keys=new java.util.ArrayList<>();for(String key:new String[]{"low1","low01","frameTime"})if(layout.metric(key))keys.add(key);
+        float statsX=wide?pad+heroWidth+pad:pad,statsY=wide?body:body+heroHeight+10;
+        float statsW=w-pad-statsX,statH=wide?70:Math.min(72,h-statsY-pad);
+        for(int i=0;i<keys.size();i++) {
+            String key=keys.get(i),label=key.equals("low1")?"1% LOW":key.equals("low01")?"0,1% LOW":"ВРЕМЯ КАДРА";
+            float gap=keys.size()>1?10:0,cw=(statsW-gap*(keys.size()-1))/Math.max(1,keys.size());
+            RectF area=new RectF(statsX+i*(cw+gap),statsY,statsX+i*(cw+gap)+cw,statsY+statH);
+            metric(c,label,key.equals("frameTime")?decimal(value(game,key)):number(value(game,key)),key.equals("frameTime")?"мс":key.equals("low01")?low01Status(game):"FPS",area,white);
+        }
+        float signalTop=wide?body+92:statsY+statH+18;
+        if(nerv && layout.metric("history") && h-signalTop-pad>=40)fpsSignal(c,new RectF(wide?statsX:pad,signalTop,w-pad,h-pad),game);
+        if(game!=null && game.optBoolean("paused") && h>=200)fit(c,"ALT+TAB / ПАУЗА",pad,h-pad,10,heroWidth,muted);
+    }
+    private void fpsSignal(Canvas c,RectF area,JSONObject game) {
+        boolean budget=area.width()>=390;float budgetW=budget?108:0;
+        float left=area.left,top=area.top+18,right=area.right-budgetW,bottom=area.bottom-4;
+        fit(c,"MAGI // FPS SIGNAL · 60 С",left,area.top+8,9,right-left,accent);
+        for(int i=0;i<=8;i++){float x=left+(right-left)*i/8;line(c,x,top,x,bottom,0xFF38222A,1);}
+        for(int i=0;i<3;i++){float y=top+(bottom-top)*i/2;line(c,left,y,right,y,0xFF56313B,1);}
+        long now=android.os.SystemClock.elapsedRealtime();float maximum=60;
+        for(FpsPoint point:fpsHistory)if(Float.isFinite(point.fps))maximum=Math.max(maximum,point.fps);
+        maximum=(float)Math.ceil(maximum/60)*60;
+        Path path=new Path();boolean started=false;float lastX=0,lastY=0;
+        for(FpsPoint point:fpsHistory) {
+            if(now-point.time>60000)continue;
+            if(!Float.isFinite(point.fps)){started=false;continue;}
+            float x=left+(right-left)*(1-(now-point.time)/60000f),y=bottom-(bottom-top)*Math.min(1,point.fps/maximum);
+            if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);lastX=x;lastY=y;
+        }
+        p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+        if(started){p.setColor(accent);c.drawCircle(lastX,lastY,3,p);}
+        if(fpsHistory.size()<2)fit(c,"ОЖИДАНИЕ СИГНАЛА",left+8,top+20,10,right-left-16,muted);
+        if(budget) {
+            float frame=value(game,"frameTime"),row=(area.height()-8)/3;
+            for(int i=0;i<3;i++) {
+                int fps=new int[]{60,120,240}[i];float y=area.top+i*row;
+                boolean met=Float.isFinite(frame)&&frame<=1000f/fps;
+                text(c,fps+" FPS",area.right-94,y+12,10,met?accent:muted,medium);
+                for(int n=0;n<7;n++){p.setColor(Float.isFinite(frame)?met?accent:secondary:0xFF38222A);c.drawRect(area.right-94+n*12,y+18,area.right-86+n*12,y+24,p);}
+            }
+        }
+    }
+    private void frameGraph(Canvas c,float w,float h) {
+        float pad=padding(w,h);cardTitle(c,"FRAME TIME · 60 С",w,h);
+        JSONObject game=object("game");JSONArray frames=game==null?null:game.optJSONArray("frameSeries");
+        float limit=33.4f;if(frames!=null)for(int i=0;i<frames.length();i++){double v=frames.optDouble(i);if(Double.isFinite(v)&&v>0)limit=Math.max(limit,(float)v);}
+        limit=(float)Math.ceil(limit/8.333f)*8.333f;
+        RectF plot=new RectF(pad,pad+28,w-pad-25,h-pad-15);if(plot.height()<20)return;
+        chartGrid(c,plot,limit,false);
+        if(nerv)for(float budget:new float[]{4.167f,8.333f,16.667f})if(budget<limit){float y=plot.bottom-plot.height()*budget/limit;line(c,plot.left,y,plot.right,y,0xFF824354,1);if(plot.height()>100)text(c,Math.round(1000/budget)+" FPS",plot.left+4,y-3,8,secondary,medium);}
+        if(frames==null || frames.length()<2)fit(c,"Ожидание кадров…",plot.left+5,plot.centerY(),12,plot.width()-10,muted);
+        else {
+            Path path=new Path();boolean started=false;int count=Math.min(300,frames.length()),start=frames.length()-count;
+            for(int i=0;i<count;i++) {
+                double value=frames.optDouble(start+i);if(!Double.isFinite(value)||value<=0){started=false;continue;}
+                float x=plot.left+plot.width()*(300-count+i)/299,y=plot.bottom-plot.height()*(float)value/limit;
+                if(nerv)line(c,x,plot.bottom,x,y,value>16.667?0x77FF4657:0x55FF953D,1);
+                if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
+            }
+            p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+        }
+        chartTimes(c,plot,h-pad,60);
+    }
+    private void device(Canvas c,float w,float h,String title,JSONObject data,int color,int series) {
+        float pad=padding(w,h);boolean compact=h<190;cardTitle(c,compact?title:title.equals("CPU")?"01 / PROCESSOR":"02 / GRAPHICS",w,h);
+        if(!compact)fit(c,data==null?"Ожидание датчика":data.optString("name","—"),pad,pad+46,20,w-pad*2,white);
+        float body=compact?pad+25:pad+68,footer=h-pad-37;
+        float bodyH=Math.max(36,footer-body-10);boolean columns=w>=300 || compact;
+        float firstW=columns?(w-pad*3)*.61f:w-pad*2,loadX=columns?pad+firstW+pad:pad;
+        float tempSize=bounded(Math.min(firstW*.65f,bodyH*.65f),25,84);
+        if(layout.metric("temperature")) {
+            fit(c,number(value(data,"temperature"))+"°C",pad,body+tempSize,tempSize,firstW,white);
+            if(bodyH>70)text(c,"ТЕМПЕРАТУРА",pad,body+tempSize+20,10,color,medium);
+        }
+        if(layout.metric("load")) {
+            float load=value(data,"load"),lw=columns?w-pad-loadX:w-pad*2;
+            float ly=columns?body:body+tempSize+35,lh=columns?bodyH:Math.max(40,footer-ly-8);
+            if(nerv || lw<105 || lh<90) {
+                float size=bounded(Math.min(lw*.40f,lh*.48f),20,52);
+                fit(c,number(load)+"%",loadX,ly+size,size,lw,white);
+                if(lh>65){nervSegments(c,loadX,ly+size+12,lw,Math.min(20,lh*.13f),load,color,16);}
+                if(lh>120)loadSpark(c,loadX,ly+size+46,lw,Math.max(16,lh-size-46),series+2,color);
+            }else {
+                float diameter=Math.min(lw-4,lh-4),cx=loadX+lw/2,cy=ly+lh/2;
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(8);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(0xFF253245);
+                RectF arc=new RectF(cx-diameter/2,cy-diameter/2,cx+diameter/2,cy+diameter/2);c.drawArc(arc,140,260,false,p);
+                if(Float.isFinite(load)){p.setColor(color);c.drawArc(arc,140,260*Math.max(0,Math.min(1,load/100)),false,p);}p.setStrokeCap(Paint.Cap.BUTT);p.setStyle(Paint.Style.FILL);
+                loadLabel(c,cx,cy,load);
+            }
+        }
+        if(h>=135) {
+            line(c,pad,footer-10,w-pad,footer-10,0xFF56313B,1);
+            if(layout.metric("clock"))metric(c,"ЧАСТОТА",number(value(data,"clock"))+" MHz","",new RectF(pad,footer,w/2-5,h-pad+2),white);
+            if(layout.metric("power"))metric(c,"МОЩНОСТЬ",number(value(data,"power"))+" W","",new RectF(w/2+5,footer,w-pad,h-pad+2),white);
+        }
+    }
+    private void gameHardware(Canvas c,float w,float h) {
+        float pad=padding(w,h);cardTitle(c,"02 / HARDWARE",w,h);
+        boolean columns=w>=420;float top=pad+31,gap=16,sectionH=columns?h-top-pad:(h-top-pad-gap)/2,sectionW=columns?(w-pad*2-gap)/2:w-pad*2;
+        hardwareSection(c,new RectF(pad,top,pad+sectionW,top+sectionH),"GPU",object("gpu"),secondary,1);
+        RectF second=columns?new RectF(pad+sectionW+gap,top,w-pad,h-pad):new RectF(pad,top+sectionH+gap,w-pad,h-pad);
+        if(!columns)line(c,pad,second.top-gap/2,w-pad,second.top-gap/2,0xFF56313B,1);
+        hardwareSection(c,second,"CPU",object("cpu"),accent,0);
+    }
+    private void hardwareSection(Canvas c,RectF r,String title,JSONObject data,int color,int series) {
+        boolean compact=r.height()<150;float temperature=value(data,"temperature"),load=value(data,"load");
+        float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.28f),24,68);
+        text(c,title,r.left,r.top+12,12,color,medium);
+        if(compact) {
+            fit(c,number(temperature)+"°C / "+number(load)+"%",r.left,r.top+40,24,r.width(),white);
+            if(r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
+        }
+        float baseline=r.top+tempSize+27;
+        if(layout.metric("temperature")){fit(c,number(temperature)+"°C",r.left,baseline,tempSize,r.width(),white);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
+        if(layout.metric("load")) {
+            float barY=r.top+r.height()*.73f;
+            text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
+            if(nerv)nervSegments(c,r.left,barY,r.width(),18,load,color,18);
+            else {box(c,r.left,barY,r.width(),7,0xFF263446);if(Float.isFinite(load))box(c,r.left,barY,r.width()*Math.max(0,Math.min(1,load/100)),7,color);}
+            if(r.bottom-barY>44)loadSpark(c,r.left,barY+28,r.width(),r.bottom-barY-29,series+2,color);
+        }
+    }
+    private void cooling(Canvas c,float w,float h) {
+        float pad=padding(w,h);cardTitle(c,"04 / COOLING",w,h);JSONObject cpu=object("cpu"),gpu=object("gpu");
+        String[] keys={"fan","sideFan","pump","gpuFan"},labels={"ВЕРХ / AIO","БОК / ВДУВ","ПОМПА","GPU / FAN"},sources={"Fan #1","Fan #2","Fan #7","ВИДЕОКАРТА"};
+        java.util.ArrayList<Integer> rows=new java.util.ArrayList<>();for(int i=0;i<4;i++)if(layout.metric(keys[i]))rows.add(i);
+        boolean columns=w>=400;int count=rows.size(),rowCount=columns?(count+1)/2:count;
+        float top=pad+29,rh=(h-top-pad)/Math.max(1,rowCount),cw=columns?(w-pad*3)/2:w-pad*2;
+        for(int n=0;n<count;n++) {
+            int index=rows.get(n);float x=pad+(columns?n%2*(cw+pad):0),y=top+(columns?n/2:n)*rh;
+            float rpm=value(index==3?gpu:cpu,keys[index].equals("gpuFan")?"fan":keys[index]);int color=index==3?secondary:accent;
+            if(rh<65){fit(c,labels[index]+"  "+number(rpm)+" RPM",x,y+Math.min(25,rh-3),14,cw,color);continue;}
+            fit(c,labels[index],x,y+12,11,cw,color);
+            fit(c,number(rpm)+" RPM",x,y+bounded(rh*.56f,35,65),bounded(Math.min(cw*.21f,rh*.35f),20,44),cw,white);
+            if(rh>90)fit(c,sources[index],x,y+rh-14,10,cw,muted);
+            if(n<count-1)line(c,x,y+rh-4,x+cw,y+rh-4,0xFF56313B,1);
+        }
     }
     static String low01Status(JSONObject game) {
         if(game==null)return "НЕТ ДАННЫХ";
@@ -163,98 +318,6 @@ public final class DashboardView extends View {
             return Math.min(10,(int)seconds)+" / 10 СЕКУНД";
         }
         return "НАКОПЛЕНИЕ КАДРОВ";
-    }
-    private void frameGraph(Canvas c) {
-        box(c,324,443,602,247,panel);
-        text(c,"FRAME TIME · 60 С",348,476,13,white,medium);
-        text(c,"ПИК / 0,2 С",818,476,10,muted,medium);
-        JSONObject game=object("game"); JSONArray frames=game==null?null:game.optJSONArray("frameSeries");
-        float limit=33.4f;
-        if(frames!=null) for(int i=0;i<frames.length();i++) {double v=frames.optDouble(i);if(Double.isFinite(v)&&v>0)limit=Math.max(limit,(float)v);}
-        limit=(float)Math.ceil(limit/8.333f)*8.333f;
-        float left=348,top=497,width=520,height=155;
-        for(int i=0;i<3;i++) {float y=top+i*height/2;line(c,left,y,left+width,y,0xFF263446,1);text(c,number(limit*(1-i/2f)),884,y+4,10,muted,regular);}
-        if(nerv)for(float budget:new float[]{4.167f,8.333f,16.667f})if(budget<limit) {
-            float y=top+height*(1-budget/limit);line(c,left,y,left+width,y,0xFF824354,1);
-            text(c,Math.round(1000/budget)+" FPS",left+5,y-3,8,secondary,medium);
-        }
-        if(frames==null || frames.length()<2) text(c,"Ожидание покадровых данных…",440,610,15,muted,regular);
-        else {
-            Path path=new Path(); boolean started=false; int count=Math.min(frames.length(),300),start=frames.length()-count;
-            for(int i=0;i<count;i++) {
-                double v=frames.optDouble(start+i);if(!Double.isFinite(v)||v<=0){started=false;continue;}
-                float x=left+width*(300-count+i)/299,y=top+height*(1-(float)v/limit);
-                if(nerv)line(c,x,top+height,x,y,((float)v>16.667?0x77FF4657:0x55FF953D),1);
-                if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
-            }
-            p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
-        }
-        text(c,"−60 с",348,675,10,muted,regular);text(c,"−30 с",587,675,10,muted,regular);text(c,"СЕЙЧАС",821,675,10,muted,regular);
-    }
-    private void device(Canvas c, float x, String index, String title, JSONObject data, int color, int series) {
-        float y = 125;
-        box(c,x,y,436,350,panel);
-        line(c,x+24,y+26,x+24,y+47,color,3);
-        text(c,index+"   /   "+title,x+39,y+42,13,color,medium);
-        fit(c,data == null ? "Ожидание датчика" : data.optString("name","—"),x+24,y+78,21,388,white);
-        float temp = value(data,"temperature"), load = value(data,"load");
-        int thermal = Float.isFinite(temp) && temp >= (series==0?85:83) ? 0xFFFF7777 : color;
-        if(layout.metric("temperature")){
-        text(c,number(temp),x+24,y+191,82,white,digits);
-        p.setTypeface(digits); p.setTextSize(82);
-        float unitX = x+24+p.measureText(number(temp))+8;
-        text(c,"°C",unitX,y+146,24,thermal,digits);
-        text(c,"ТЕМПЕРАТУРА",x+27,y+220,11,muted,medium);
-        }
-        if(layout.metric("load")){
-        if(nerv) {
-            text(c,"UTILIZATION",x+263,y+112,10,muted,medium);
-            text(c,number(load)+"%",x+263,y+173,49,white,digits);
-            nervSegments(c,x+263,y+192,140,21,load,color,16);
-            loadSpark(c,x+263,y+231,140,24,series+2,color);
-        }else {
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(10); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF253245);
-        RectF arc = new RectF(x+274,y+120,x+410,y+256); c.drawArc(arc,140,260,false,p);
-        if (Float.isFinite(load)) { p.setColor(color); c.drawArc(arc,140,260*Math.max(0,Math.min(1,load/100)),false,p); }
-        p.setStrokeCap(Paint.Cap.BUTT); p.setStyle(Paint.Style.FILL);
-        loadLabel(c, x+342, y+188, load);
-        }
-        }
-        line(c,x+24,y+266,x+412,y+266,0xFF263446,1);
-        if(layout.metric("clock"))stat(c,x+24,y+296,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
-        if(layout.metric("power"))stat(c,x+235,y+296,"МОЩНОСТЬ",number(value(data,"power"))+" W");
-    }
-    private void gameHardware(Canvas c) {
-        box(c,944,125,220,565,panel);
-        text(c,"02   /   HARDWARE",966,167,13,accent,medium);
-        hardwareSection(c,205,"GPU",object("gpu"),secondary,83);
-        line(c,966,393,1142,393,0xFF263446,1);
-        hardwareSection(c,430,"CPU",object("cpu"),accent,85);
-
-    }
-    private void hardwareSection(Canvas c,float y,String title,JSONObject data,int color,float warning) {
-        float temperature=value(data,"temperature"),load=value(data,"load");
-        int thermal=Float.isFinite(temperature)&&temperature>=warning ? 0xFFFF7777 : color;
-        text(c,title,966,y,14,color,medium);
-        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),966,y+65,58,"°C",23,18,thermal);
-        text(c,"ТЕМПЕРАТУРА",966,y+87,10,muted,medium);}
-        if(layout.metric("load")){
-        text(c,"ЗАГРУЗКА",966,y+133,10,muted,medium);
-        p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+" %",1142,y+139,31,white,digits);p.setTextAlign(Paint.Align.LEFT);
-        box(c,966,y+155,176,6,0xFF263446);
-        if(Float.isFinite(load))box(c,966,y+155,176*Math.max(0,Math.min(1,load/100)),6,color);}
-    }
-    private void cooling(Canvas c) {
-        float x=944;
-        box(c,x,125,220,565,panel);
-        text(c,"04   /   COOLING",x+22,167,13,accent,medium);
-        JSONObject cpu=object("cpu"), gpu=object("gpu");
-        boolean profile=cpu!=null && cpu.optBoolean("coolingProfile");
-        if(layout.metric("fan"))coolingRow(c,x,205,profile ? "ВЕРХ / AIO" : "CPU / AIO",value(cpu,"fan"),profile ? "Fan #1" : sensorName(cpu,"fanName"),accent);
-        if(layout.metric("sideFan"))coolingRow(c,x,315,"БОК / ВДУВ",value(cpu,"sideFan"),profile ? "Fan #2" : "КОРПУС",accent);
-        if(layout.metric("pump"))coolingRow(c,x,425,"ПОМПА",value(cpu,"pump"),profile ? "Fan #7" : sensorName(cpu,"pumpName"),accent);
-        if(layout.metric("gpuFan"))coolingRow(c,x,535,"GPU / ВЕНТИЛЯТОР",value(gpu,"fan"),"ВИДЕОКАРТА",secondary);
-
     }
     private String sensorName(JSONObject data,String key) {
         return data==null || data.isNull(key) ? "ДАТЧИК НЕДОСТУПЕН" : data.optString(key,"ДАТЧИК НЕДОСТУПЕН");
@@ -284,46 +347,42 @@ public final class DashboardView extends View {
     private void stat(Canvas c,float x,float y,String title,String val,float size) {
         text(c,title,x,y,10,muted,medium); text(c,val,x,y+26,size,white,regular);
     }
-    private void memory(Canvas c,boolean playing) {
-        float top=playing?443:493;
-        box(c,36,top,270,690-top,panel);
-        text(c,"03   /   MEMORY",60,top+33,13,accent,medium);
-        JSONObject ram = object("memory"); float used=value(ram,"used"), total=value(ram,"total"), load=value(ram,"load");
-        if(nerv) {
-            float height=690-top;
-            int color=Float.isFinite(load)&&load>=90?secondary:accent;
-            text(c,number(load)+"%",60,top+85,44,white,digits);
-            text(c,decimal(used)+" / "+number(total)+" GB",60,top+110,16,muted,digits);
-            nervSegments(c,60,top+122,222,18,load,color,24);
-            loadSpark(c,60,top+153,222,height-178,4,color);
-            text(c,"MEMORY LOAD / 60 С",60,681,9,muted,medium);
-            return;
-        }
-        text(c,decimal(used),60,top+87,42,white,digits);
-        text(c,"/ "+number(total)+" GB",183,top+83,20,muted,digits);
-        for (int i=0;i<24;i++) box(c,60+i*9.2f,top+107,6,24,Float.isFinite(load) && i<load/100*24 ? accent:0xFF263446);
-        text(c,"ИСПОЛЬЗОВАНО",60,661,10,muted,medium);
-        p.setTextAlign(Paint.Align.RIGHT); text(c,number(load)+" %",282,661,20,white,regular); p.setTextAlign(Paint.Align.LEFT);
+    private void memory(Canvas c,float w,float h) {
+        float pad=padding(w,h);cardTitle(c,"03 / MEMORY",w,h);JSONObject ram=object("memory");
+        float load=value(ram,"load"),used=value(ram,"used"),total=value(ram,"total");int color=Float.isFinite(load)&&load>=90?secondary:accent;
+        boolean wide=w>=400 && h>=160;float mainW=wide?w*.40f:w-pad*2,body=pad+27;
+        float size=bounded(Math.min(mainW*.30f,h*.24f),24,64);
+        fit(c,number(load)+"%",pad,body+size,size,mainW,color);
+        fit(c,decimal(used)+" / "+number(total)+" GB",pad,body+size+23,Math.min(18,w*.06f),mainW,muted);
+        float barY=body+size+36;
+        if(barY+14<h-pad){if(nerv)nervSegments(c,pad,barY,mainW,18,load,color,24);else for(int i=0;i<24;i++)box(c,pad+i*mainW/24,barY,mainW/24-2,18,Float.isFinite(load)&&i<Math.ceil(load/100*24)?color:0xFF263446);}
+        RectF spark=wide?new RectF(w*.47f,body+10,w-pad,h-pad-16):new RectF(pad,barY+35,w-pad,h-pad-16);
+        if(spark.height()>=16){loadSpark(c,spark.left,spark.top,spark.width(),spark.height(),4,color);text(c,"MEMORY LOAD / 60 С",spark.left,h-pad+2,9,muted,medium);}
     }
-    private void graph(Canvas c) {
-        if(nerv){resourceGraph(c);return;}
-        box(c,324,493,602,197,panel);
-        text(c,"THERMAL HISTORY",348,526,13,white,medium);
-        text(c,"CPU",688,526,11,accent,medium); text(c,"GPU",739,526,11,secondary,medium); text(c,"3 МИН",842,526,11,muted,medium);
-        float left=348, top=547, width=520, height=105;
-        for(int i=0;i<3;i++) { float y=top+i*height/2; line(c,left,y,left+width,y,0xFF263446,1); text(c,""+(100-i*50),884,y+4,10,muted,regular); }
+    private void chartGrid(Canvas c,RectF plot,float maximum,boolean percent) {
+        if(nerv)for(int i=0;i<=10;i++){float x=plot.left+plot.width()*i/10;line(c,x,plot.top,x,plot.bottom,0xFF38222A,1);}
+        for(int i=0;i<3;i++){float y=plot.top+plot.height()*i/2;line(c,plot.left,y,plot.right,y,0xFF56313B,1);text(c,number(maximum*(1-i/2f))+(percent?"%":""),plot.right+5,y+4,9,muted,regular);}
+    }
+    private void chartTimes(Canvas c,RectF plot,float baseline,int seconds) {
+        text(c,"−"+seconds+" с",plot.left,baseline,9,muted,regular);
+        if(plot.width()>260)text(c,"−"+seconds/2+" с",plot.centerX()-18,baseline,9,muted,regular);
+        p.setTextAlign(Paint.Align.RIGHT);text(c,"СЕЙЧАС",plot.right,baseline,9,muted,regular);p.setTextAlign(Paint.Align.LEFT);
+    }
+    private void graph(Canvas c,float w,float h) {
+        float pad=padding(w,h);cardTitle(c,nerv?"MAGI // RESOURCE LOAD":"THERMAL HISTORY",w,h);
+        RectF plot=new RectF(pad,pad+30,w-pad-30,h-pad-15);if(plot.height()<20)return;
+        chartGrid(c,plot,100,nerv);
         for(int series=0;series<2;series++) {
-            Path path=new Path(); boolean started=false;
-            long now=android.os.SystemClock.elapsedRealtime();
+            Path path=new Path();boolean started=false;float lastY=0;long now=android.os.SystemClock.elapsedRealtime();
             for(ThermalPoint point:history) {
-                float v=point.values[series], x=left+width*(1-(now-point.time)/180000f);
-                if(!Float.isFinite(v)) { started=false; continue; }
-                float y=top+height*(1-Math.min(100,Math.max(0,v))/100);
-                if(!started) { path.moveTo(x,y); started=true; } else path.lineTo(x,y);
+                float value=point.values[series+(nerv?2:0)];if(!Float.isFinite(value)){started=false;continue;}
+                float x=plot.left+plot.width()*(1-(now-point.time)/180000f),y=plot.bottom-plot.height()*Math.max(0,Math.min(100,value))/100;
+                if(!started){path.moveTo(x,y);started=true;}else {if(nerv)path.lineTo(x,lastY);path.lineTo(x,y);}lastY=y;
             }
-            p.setColor(series==0?accent:secondary); p.setStrokeWidth(2.5f); p.setStyle(Paint.Style.STROKE); p.setStrokeJoin(Paint.Join.ROUND); c.drawPath(path,p); p.setStyle(Paint.Style.FILL);
+            p.setColor(series==0?accent:secondary);p.setStrokeWidth(2);p.setStyle(Paint.Style.STROKE);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
         }
-        text(c,"−180 с",348,675,10,muted,regular); text(c,"−90 с",587,675,10,muted,regular); text(c,"СЕЙЧАС",821,675,10,muted,regular);
+        if(w>320){text(c,"CPU",w-pad-100,pad+12,10,accent,medium);text(c,"GPU",w-pad-49,pad+12,10,secondary,medium);}
+        chartTimes(c,plot,h-pad,180);
     }
     private void nervSegments(Canvas c,float left,float top,float width,float height,float load,int color,int count) {
         float step=width/count;
@@ -341,23 +400,6 @@ public final class DashboardView extends View {
             if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
         }
         line(c,left,top+height,left+width,top+height,0xFF56313B,1);p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
-    }
-    private void resourceGraph(Canvas c) {
-        box(c,324,493,602,197,panel);text(c,"MAGI // RESOURCE LOAD",348,526,12,accent,medium);
-        text(c,"CPU",688,526,11,accent,medium);text(c,"GPU",739,526,11,secondary,medium);text(c,"3 МИН",842,526,11,muted,medium);
-        float left=348,top=547,width=520,height=105;
-        for(int i=0;i<=10;i++){float x=left+width*i/10;line(c,x,top,x,top+height,0xFF38222A,1);}
-        for(int i=0;i<=4;i++){float y=top+height*i/4;line(c,left,y,left+width,y,0xFF56313B,1);text(c,(100-i*25)+"%",879,y+4,9,muted,regular);}
-        for(int series=0;series<2;series++) {
-            Path path=new Path();boolean started=false;long now=android.os.SystemClock.elapsedRealtime();float previousY=0;
-            for(ThermalPoint point:history) {
-                float value=point.values[series+2];if(!Float.isFinite(value)){started=false;continue;}
-                float x=left+width*(1-(now-point.time)/180000f),y=top+height*(1-Math.max(0,Math.min(100,value))/100);
-                if(!started){path.moveTo(x,y);started=true;}else {path.lineTo(x,previousY);path.lineTo(x,y);}previousY=y;
-            }
-            p.setColor(series==0?accent:secondary);p.setStrokeWidth(2);p.setStyle(Paint.Style.STROKE);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
-        }
-        text(c,"−180 с",348,675,10,muted,regular);text(c,"−90 с",587,675,10,muted,regular);text(c,"СЕЙЧАС",821,675,10,muted,regular);
     }
     private void drawMedia(Canvas c) {
         JSONObject media=media();if(media==null)return;
@@ -386,15 +428,22 @@ public final class DashboardView extends View {
         p.setTextAlign(Paint.Align.CENTER);text(c,title,rect.centerX(),rect.centerY()+10,29,enabled?accent:muted,medium);p.setTextAlign(Paint.Align.LEFT);
     }
     static String mediaTime(double seconds){int time=(int)Math.max(0,seconds);return time>=3600?String.format(Locale.US,"%d:%02d:%02d",time/3600,time/60%60,time%60):String.format(Locale.US,"%d:%02d",time/60,time%60);}
-    private void drawBlock(Canvas c,String key,boolean game,Runnable renderer) {
+    private void drawBlock(Canvas c,String key,boolean game) {
         if(!layout.visible(key,game))return;
-        RectF source=DashboardLayout.original(key,game),target=layout.rect(key,game);
+        RectF target=layout.rect(key,game);
         if(mediaVisible()){target.top=125+(target.top-125)*.79f;target.bottom=125+(target.bottom-125)*.79f;}
         drawnCards.put(key,target);
-        c.save();c.clipRect(target);box(c,target.left,target.top,target.width(),target.height(),panel);
-        float factor=Math.min(target.width()/source.width(),target.height()/source.height());
-        c.translate(target.centerX(),target.centerY());c.scale(factor,factor);c.translate(-source.centerX(),-source.centerY());
-        renderer.run();c.restore();
+        c.save();c.clipRect(target);c.translate(target.left,target.top);
+        float w=target.width(),h=target.height();box(c,0,0,w,h,panel);
+        switch(key) {
+            case "main":gamePanel(c,w,h);break;
+            case "cpu":device(c,w,h,"CPU",object("cpu"),accent,0);break;
+            case "gpu":device(c,w,h,"GPU",object("gpu"),secondary,1);break;
+            case "memory":memory(c,w,h);break;
+            case "history":if(game)frameGraph(c,w,h);else graph(c,w,h);break;
+            case "side":if(game)gameHardware(c,w,h);else cooling(c,w,h);break;
+        }
+        c.restore();
     }
     private void drawEditor(Canvas c,boolean game) {
         button(c,modeHit,"РЕДАКТОР / "+(game?"ИГРА":"ОБЗОР"));
