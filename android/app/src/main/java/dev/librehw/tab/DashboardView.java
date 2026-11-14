@@ -195,11 +195,10 @@ public class DashboardView extends View {
     private static String number(float n) { return Float.isNaN(n) ? "—" : String.format(Locale.US, "%.0f", n); }
     private static String decimal(float n) { return Float.isNaN(n) ? "—" : String.format(Locale.US, "%.1f", n); }
     private void text(Canvas c, String text, float x, float y, float size, int color, Typeface font) {
-        text=UiText.get(text);
         p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); p.setTypeface(nerv ? (font==medium?terminal:Typeface.MONOSPACE) : font); p.setTextSize(size); c.save();c.translate(x,y);c.scale(1/textRatio(),1);c.drawText(text,0,0,p);c.restore();
     }
     private void fit(Canvas c,String value,float x,float y,float size,float width,int color) {
-        width*=textRatio();if(width<=0)return;String label=value==null?"—":UiText.get(value);
+        width*=textRatio();if(width<=0)return;String label=value==null?"—":value;
         p.setTypeface(nerv?terminal:medium);p.setTextSize(size);
         while(p.measureText(label)>width && size>10)p.setTextSize(--size);
         if(p.measureText(label)>width){int end=p.breakText(label,true,Math.max(0,width-p.measureText("…")),null);label=label.substring(0,end)+"…";}
@@ -331,13 +330,13 @@ public class DashboardView extends View {
         if(!unit.isEmpty() && area.height()>65)fit(c,unit,area.left,area.bottom-2,10,area.width(),muted);
     }
     private void gamePanel(Canvas c,float w,float h) {
-        float pad=padding(w,h),body=h<155?33:h<220?65:78;JSONObject game=object("game");
+        float pad=padding(w,h),body=h<155?33:h<220?71:84;JSONObject game=object("game");
         cardTitle(c,w<350?"01 / GAME":"01 / GAME TELEMETRY",w,h);
-        if(h>=155)fit(c,game==null?UiText.get("Ожидание игры"):game.isNull("name")?UiText.get("Ожидание игры"):game.optString("name"),pad,h<220?50:60,h<240?20:25,w-pad*2,white);
+        if(h>=155)fit(c,game==null?UiText.get("Ожидание игры"):game.isNull("name")?UiText.get("Ожидание игры"):game.optString("name"),pad,h<220?56:66,h<240?20:25,w-pad*2,white);
         if(h<155) {
             if(layout.metric("fps"))fit(c,number(value(game,"fps"))+" FPS",pad,Math.min(pad+49,h*.57f),h<110?24:32,w-pad*2,white);
             if(layout.metric("fps"))trend(c,"game.fps",pad,h*.57f+5,w-pad*2,4,accent,false);
-            String[] smallKeys={"low1","low01","frameTime"},smallLabels={"1% LOW","0,1% LOW",UiText.get("мс")};
+            String[] smallKeys={"low1","low01","frameTime"},smallLabels={"1% LOW",UiText.get("0,1% LOW"),UiText.get("мс")};
             int count=0;for(String key:smallKeys)if(layout.metric(key))count++;
             int column=0;float cw=(w-pad*2)/Math.max(1,count);
             for(int i=0;i<3;i++)if(layout.metric(smallKeys[i])) {
@@ -348,7 +347,7 @@ public class DashboardView extends View {
             return;
         }
         if(w>=330 && w<540 && h>=230 && layout.metric("fps")) {
-            float signalHeight=h>=300?70:45,contentBottom=h-pad-signalHeight-16,top=78;
+            float signalHeight=h>=300?70:45,contentBottom=h-pad-signalHeight-16,top=84;
             float heroWidth=(w-pad*3)*.50f,contentHeight=contentBottom-top;
             float size=bounded(Math.min(heroWidth*.62f,contentHeight*.75f),44,104);
             fit(c,number(value(game,"fps")),pad,top+size,size,heroWidth,white);
@@ -359,7 +358,7 @@ public class DashboardView extends View {
             for(int i=0;i<stats.size();i++) {
                 String key=stats.get(i),label=key.equals("low1")?UiText.get("1% LOW · 10 С"):key.equals("low01")?UiText.get("0,1% LOW · 60 С"):UiText.get("КАДР / мс");float y=top+i*row;
                 String reading=key.equals("frameTime")?decimal(value(game,key)):key.equals("low01")&&Float.isNaN(value(game,key))?low01Status(game):number(value(game,key));
-                if(row<34)fit(c,(key.equals("low1")?"1% ":key.equals("low01")?"0,1% ":UiText.get("мс "))+reading,x,y+row-5,13,w-pad-x,white);
+                if(row<34)fit(c,(key.equals("low1")?"1% ":key.equals("low01")?UiText.get("0,1% "):UiText.get("мс "))+reading,x,y+row-5,13,w-pad-x,white);
                 else {fit(c,label,x,y+10,9,w-pad-x,muted);fit(c,reading,x,y+row-10,bounded(row*.43f,18,30),w-pad-x,white);}
                 trend(c,"game."+key,x,y+row-5,w-pad-x,4,accent,false);
             }
@@ -378,7 +377,7 @@ public class DashboardView extends View {
         float statsX=wide&&showFps?pad+heroWidth+pad:pad,statsY=wide||!showFps?body:body+heroHeight+10;
         float statsW=w-pad-statsX,statH=wide?70:Math.min(72,h-statsY-pad);
         for(int i=0;i<keys.size();i++) {
-            String key=keys.get(i),label=key.equals("low1")?"1% LOW":key.equals("low01")?"0,1% LOW":UiText.get("ВРЕМЯ КАДРА");
+            String key=keys.get(i),label=key.equals("low1")?"1% LOW":key.equals("low01")?UiText.get("0,1% LOW"):UiText.get("ВРЕМЯ КАДРА");
             float gap=keys.size()>1?10:0,cw=(statsW-gap*(keys.size()-1))/Math.max(1,keys.size());
             RectF area=new RectF(statsX+i*(cw+gap),statsY,statsX+i*(cw+gap)+cw,statsY+statH);
             metric(c,label,key.equals("frameTime")?decimal(value(game,key)):number(value(game,key)),key.equals("frameTime")?UiText.get("мс"):key.equals("low01")?low01Status(game):"FPS",area,white);
@@ -541,14 +540,14 @@ public class DashboardView extends View {
         hardwareSection(c,second,"CPU",object("cpu"),accent,0);
     }
     private void hardwareSection(Canvas c,RectF r,String title,JSONObject data,int color,int series) {
-        boolean compact=r.height()<150;float temperature=value(data,"temperature"),load=value(data,"load");
-        float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.28f),24,68);
+        boolean compact=r.height()<190;float temperature=value(data,"temperature"),load=value(data,"load");
+        float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.24f),24,68);
         if(r.height()>=65)text(c,title,r.left,r.top+12,12,color,medium);
         if(compact) {
             String values=(layout.metric("temperature")?number(temperature)+"°C":"")+(layout.metric("temperature")&&layout.metric("load")?" / ":"")+(layout.metric("load")?number(load)+"%":"");
             if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-8),bounded(r.height()*.55f,9,14),r.width(),color);trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,r.bottom-5,r.width(),4,color,false);return;}
             fit(c,values,r.left,r.top+40,24,r.width(),white);
-            if(layout.metric("temperature"))trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,r.top+47,r.width(),5,color,false);
+            if(layout.metric("temperature"))trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,r.top+52,r.width(),Math.max(4,Math.min(28,r.height()-90)),color,false);
             if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
         float baseline=r.top+tempSize+27;
@@ -782,6 +781,7 @@ public class DashboardView extends View {
             valueWithUnit(c,number(value(weather,"temperature")),730,250,64,"°C",24,22,accent);
             fit(c,WeatherClient.summary(weather),730,290,20,410,muted);
             temperatureGlyph(c,1105,205,value(weather,"temperature"),accent);
+            fit(c,"−20 / +40 °C",1060,265,8,82,muted);
             long age=System.currentTimeMillis()-weather.optLong("fetched",0);
             String source=weather.optString("source","Open-Meteo");
             fit(c,(age>900000?UiText.get("Сохранено · "):"")+source+UiText.get(" · нажми для обновления"),730,319,11,410,muted);
@@ -816,7 +816,7 @@ public class DashboardView extends View {
             if(slot==null || !slot.has("temperature")){text(c,"—",x+10,441,26,white,digits);text(c,UiText.get("Нет прогноза"),x+9,460,11,muted,regular);continue;}
             text(c,number(value(slot,"temperature"))+"°",x+10,441,27,white,digits);
             String summary=WeatherClient.summary(slot);
-            temperatureGlyph(c,x+108,420,value(slot,"temperature"),accent);
+            temperatureGlyph(c,x+108,410,value(slot,"temperature"),accent);
             if(summary.length()>19)summary=summary.substring(0,18)+"…";
             fit(c,summary,x+9,457,12,112,muted);
             float probability=value(slot,"probability");
@@ -828,7 +828,7 @@ public class DashboardView extends View {
         }
     }
     private void temperatureGlyph(Canvas c,float x,float y,float temperature,int color){
-        // Thermometer with an explicit -20..40 C range (not a device limit).
+        // Weather thermometer: -20..40 C range, labeled on the current weather card.
         line(c,x,y,x,y+32,tint(color,55),5);
         if(Float.isFinite(temperature)){float fraction=Math.max(0,Math.min(1,(temperature+20)/60));line(c,x,y+32,x,y+32-32*fraction,color,5);}
         p.setColor(color);circle(c,x,y+34,5,p);

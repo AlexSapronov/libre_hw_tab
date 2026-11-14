@@ -59,11 +59,15 @@ public class VisualLanguageTest {
         view.forceStandby=true;
         // A cached weather response created before changing language must also translate offline.
         view.weather=new JSONObject().put("city","London").put("temperature",7).put("code",61).put("summary","Дождь");
+        JSONArray forecast=WeatherClient.upcoming(view.weather,java.time.Instant.now());
+        for(int i=0;i<forecast.length();i++)forecast.getJSONObject(i).put("temperature",7+i*2).put("code",61).put("probability",60).put("precipitation",1.2);
+        view.weather.put("forecast",forecast);
         assertEnglish(render(view,"visuals-en-standby"));view.forceStandby=false;
         view.mode=1;view.accept(null,UiText.get("Нет связи с ПК"),false);assertEnglish(render(view,"visuals-en-disconnected"));
         assertEquals(layout,view.layout.json());
         UiText.language("ru");view=view();render(view,"visuals-ru-overview");view.themeId=0;render(view,"visuals-jade");
-        view.layout(0,0,1024,600);view.mode=2;view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);render(view,"visuals-compact-media");
+        view.layout(0,0,1024,600);view.mode=2;view.accept(DemoData.sample().put("media",MediaPanelTest.media()),"",true);render(view,"visuals-compact-media");view.themeId=8;UiText.language("en");render(view,"visuals-compact-media-magi");
+        view.layout(0,0,1920,1200);view.mode=1;render(view,"visuals-overview-media-16x10");
     }
     private void assertEnglish(List<String> labels){for(String label:labels)assertFalse("Untranslated: "+label,label.matches(".*[А-Яа-яЁё].*"));}
     @Test public void languageSelectionPersistsAndChangesNativeDialogs() throws Exception {

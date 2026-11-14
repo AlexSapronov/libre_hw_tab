@@ -245,6 +245,11 @@ final class UiText {
         map.put("сервер не ответил вовремя","server timed out");
         map.put("ч","h");
         map.put(" Мбит/с · LAN + INTERNET"," Mbps · LAN + INTERNET");
+        map.put("Язык / Language: ","Language: ");
+        map.put("Язык / Language","Language");
+        map.put("0,1% LOW","0.1% LOW");
+        map.put("0,1% ","0.1% ");
+        map.put("0,1% low","0.1% low");
         EN=Collections.unmodifiableMap(map);
     }
 }

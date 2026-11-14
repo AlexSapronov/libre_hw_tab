@@ -278,7 +278,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void menu() {
         new AlertDialog.Builder(this).setTitle("Libre HW Tab")
-            .setItems(new String[]{UiText.get("Экран ожидания"),UiText.get("Редактор блоков"),UiText.get("Погода: выбрать город"),UiText.get("Будильник"),"Wake-on-LAN",UiText.get("Автоожидание: ")+(dashboard.autoStandby?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Анимации: ")+(dashboard.animations?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Подключение"),UiText.get("Оформление: ")+DashboardView.detailLabels()[dashboard.detailLevel],"Язык / Language: "+(UiText.language().equals("en")?"English":"Русский")},(d,index)->{
+            .setItems(new String[]{UiText.get("Экран ожидания"),UiText.get("Редактор блоков"),UiText.get("Погода: выбрать город"),UiText.get("Будильник"),"Wake-on-LAN",UiText.get("Автоожидание: ")+(dashboard.autoStandby?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Анимации: ")+(dashboard.animations?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Подключение"),UiText.get("Оформление: ")+DashboardView.detailLabels()[dashboard.detailLevel],UiText.get("Язык / Language: ")+(UiText.language().equals("en")?"English":"Русский")},(d,index)->{
                 if(index==0){dashboard.forceStandby=true;dashboard.invalidate();}
                 else if(index==1)new AlertDialog.Builder(this).setTitle(UiText.get("Какой макет изменить?")).setItems(new String[]{UiText.get("Обзор"),UiText.get("Игра")},(v,choice)->beginEditor(choice==1)).show();
                 else if(index==2)weatherCity();else if(index==3)alarm();else if(index==4)wakeOptions();
@@ -290,7 +290,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
     private void language(){
-        new AlertDialog.Builder(this).setTitle("Язык / Language")
+        new AlertDialog.Builder(this).setTitle(UiText.get("Язык / Language"))
             .setSingleChoiceItems(new String[]{"Русский","English"},UiText.language().equals("en")?1:0,(dialog,which)->{
                 String language=which==1?"en":"ru";
                 if(!language.equals(UiText.language())){
@@ -320,7 +320,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                     }).setPositiveButton(UiText.get("Готово"),null).show();
                 }else if(index==1){
                     String[] keys={"temperature","load","clock","power","fps","low1","low01","frameTime","memory","history","fan","sideFan","pump","gpuFan"};
-                    String[] labels={UiText.get("Температура"),UiText.get("Загрузка"),UiText.get("Частота"),UiText.get("Мощность"),"FPS","1% low","0,1% low",UiText.get("Время кадра"),UiText.get("Память"),UiText.get("График"),UiText.get("Верх / AIO"),UiText.get("Боковые вентиляторы"),UiText.get("Помпа"),UiText.get("Вентилятор GPU")};
+                    String[] labels={UiText.get("Температура"),UiText.get("Загрузка"),UiText.get("Частота"),UiText.get("Мощность"),"FPS","1% low",UiText.get("0,1% low"),UiText.get("Время кадра"),UiText.get("Память"),UiText.get("График"),UiText.get("Верх / AIO"),UiText.get("Боковые вентиляторы"),UiText.get("Помпа"),UiText.get("Вентилятор GPU")};
                     boolean[] checked=new boolean[keys.length];for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.metric(keys[i]);
                     new AlertDialog.Builder(this).setTitle(UiText.get("Показатели")).setMultiChoiceItems(labels,checked,(v,item,on)->{
                         if(on)dashboard.layout.disabledMetrics.remove(keys[item]);else dashboard.layout.disabledMetrics.add(keys[item]);dashboard.invalidate();
