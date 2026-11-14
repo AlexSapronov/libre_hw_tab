@@ -57,6 +57,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         };
         String savedLayout=preferences.getString("layout_v1","{}");
         try{if(new JSONObject(savedLayout).optInt("version")==1 && !preferences.contains("layout_before_audio"))preferences.edit().putString("layout_before_audio",savedLayout).apply();}catch(Exception ignored){}
+        try{int v=new JSONObject(savedLayout).optInt("version");if(v>0 && v<3 && !preferences.contains("layout_before_network"))preferences.edit().putString("layout_before_network",savedLayout).apply();}catch(Exception ignored){}
         dashboard.layout=DashboardLayout.parse(savedLayout);
         dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
         dashboard.animations=preferences.getBoolean("animations",true);
@@ -293,7 +294,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 if(index==0){
                     boolean game=dashboard.playing();String[] keys=DashboardLayout.keys(game);boolean[] checked=new boolean[keys.length];
                     for(int i=0;i<keys.length;i++)checked[i]=dashboard.layout.visible(keys[i],game);
-                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":keys[i].equals("audio")?"Микшер звука":"Правая панель";
+                    String[] labels=new String[keys.length];for(int i=0;i<keys.length;i++)labels[i]=keys[i].equals("cpu")?"Процессор":keys[i].equals("gpu")?"Видеокарта":keys[i].equals("memory")?"Память":keys[i].equals("history")?"График":keys[i].equals("main")?"Игровые показатели":keys[i].equals("audio")?"Микшер звука":keys[i].equals("network")?"Сеть: Download / Upload":"Охлаждение";
                     new AlertDialog.Builder(this).setTitle("Видимые блоки").setMultiChoiceItems(labels,checked,(v,item,on)->{
                         String key=DashboardLayout.id(keys[item],game);if(on)dashboard.layout.hidden.remove(key);else dashboard.layout.hidden.add(key);dashboard.invalidate();
                     }).setPositiveButton("Готово",null).show();

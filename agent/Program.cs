@@ -37,6 +37,8 @@ builder.Services.AddSingleton<MediaService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MediaService>());
 builder.Services.AddSingleton<AudioService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AudioService>());
+builder.Services.AddSingleton<NetworkTraffic>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NetworkTraffic>());
 var app = builder.Build();
 app.Use(async (context, next) =>
 {
@@ -50,8 +52,8 @@ app.Use(async (context, next) =>
     }
     await next(context);
 });
-app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming, MediaService media, AudioService audio) => telemetry.Snapshot is { } snapshot
-    ? Results.Json(snapshot with { Game = gaming.Current, WakeTargets = NetworkWake.Targets.Value, Media = media.Current, Audio = audio.Current }) : Results.StatusCode(503));
+app.MapGet("/api/v1/telemetry", IResult (Telemetry telemetry, GamingService gaming, MediaService media, AudioService audio, NetworkTraffic network) => telemetry.Snapshot is { } snapshot
+    ? Results.Json(snapshot with { Game = gaming.Current, WakeTargets = NetworkWake.Targets.Value, Media = media.Current, Audio = audio.Current, Network = network.Current }) : Results.StatusCode(503));
 app.MapGet("/api/v1/media/{id}/thumbnail", IResult (string id,MediaService media)=>media.Thumbnail(id) is {} image?Results.Bytes(image,"image/jpeg"):Results.NotFound());
 app.MapPost("/api/v1/media/control", async Task<IResult> (MediaCommand command,MediaService media)=>await media.Control(command)?Results.Ok():Results.Conflict());
 app.MapPost("/api/v1/audio/control", IResult (AudioCommand command,AudioService audio)=> {
@@ -69,7 +71,7 @@ await app.RunAsync();
 
 record Connection(int Port, string Token);
 record Device(string Name, float? Temperature, float? Load, float? Clock, float? Power, float? Fan, float? Used, float? Total, float? Pump = null, float? SideFan = null, string? FanName = null, string? PumpName = null, bool CoolingProfile = false, float? UsableTotal = null);
-record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null, WakeTarget[]? WakeTargets = null, MediaView? Media = null, AudioView? Audio = null);
+record Snapshot(int Version, DateTimeOffset Timestamp, string Host, Device? Cpu, Device? Gpu, Device? Memory, string? SensorError, Cooling? Cooling = null, GameView? Game = null, WakeTarget[]? WakeTargets = null, MediaView? Media = null, AudioView? Audio = null, NetworkView? Network = null);
 sealed class Telemetry : BackgroundService
 {
     private Snapshot? snapshot;

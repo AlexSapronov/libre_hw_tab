@@ -248,7 +248,8 @@ public class DashboardView extends View {
             drawBlock(c,"cpu",false);
             drawBlock(c,"gpu",false);
         }
-        drawBlock(c,"side",playing);
+        if(playing){drawBlock(c,"gpu",true);drawBlock(c,"cpu",true);}
+        else {drawBlock(c,"side",false);drawBlock(c,"network",false);}
         if(layout.metric("memory"))drawBlock(c,"memory",playing);
         if(layout.metric("history"))drawBlock(c,"history",playing);
         if(mediaVisible())drawMedia(c);
@@ -440,6 +441,29 @@ public class DashboardView extends View {
             if(layout.metric("power"))metric(c,"МОЩНОСТЬ",number(value(data,"power"))+" W","",new RectF(layout.metric("clock")?w/2+5:pad,footer,w-pad,h-pad+2),white);
         }
     }
+    private void standaloneHardware(Canvas c,float w,float h,String title,int color,int series){
+        float pad=padding(w,h);cardTitle(c,title+" / TELEMETRY",w,h);
+        hardwareSection(c,new RectF(pad,pad+25,w-pad,h-pad),title,object(title.toLowerCase(Locale.ROOT)),color,series);
+    }
+    static String traffic(double bytes){return !Double.isFinite(bytes)||bytes<0?"—":String.format(Locale.US,bytes*8/1000000>=100?"%.0f":"%.2f",bytes*8/1000000);}
+    private void networkCard(Canvas c,float w,float h){
+        float pad=padding(w,h);cardTitle(c,"06 / NETWORK",w,h);
+        JSONObject n=object("network");boolean ready=n!=null&&n.optString("status").equals("ready");
+        String state=n==null?sample==null?"НЕТ СВЯЗИ С ПК":"ОБНОВИ АГЕНТ ПК":ready?n.optString("name","СЕТЬ ПК"):n.optString("status").equals("warming")?"ИЗМЕРЕНИЕ…":"СЕТЬ НЕДОСТУПНА";
+        if(h>=120)fit(c,state,pad,pad+33,10,w-pad*2,muted);
+        if(h<155){
+            fit(c,"DOWN  "+traffic(ready?value(n,"downloadBps"):Double.NaN)+" Мбит/с",pad,pad+(h<120?36:57),12,w-pad*2,accent);
+            fit(c,"UP    "+traffic(ready?value(n,"uploadBps"):Double.NaN)+" Мбит/с",pad,pad+(h<120?60:78),12,w-pad*2,secondary);return;
+        }
+        float top=pad+44,row=(h-pad-top-14)/2;
+        String[] fields={"downloadBps","uploadBps"},labels={"DOWNLOAD","UPLOAD"};
+        for(int i=0;i<2;i++){
+            float y=top+i*row;int color=i==0?accent:secondary;
+            fit(c,labels[i],pad,y+10,9,w-pad*2,color);
+            fit(c,traffic(ready?value(n,fields[i]):Double.NaN)+" Мбит/с",pad,y+Math.max(26,row-4),bounded(row*.43f,14,30),w-pad*2,white);
+        }
+        fit(c,"ТРАФИК АДАПТЕРА · LAN + INTERNET",pad,h-pad+3,8,w-pad*2,muted);
+    }
     private void gameHardware(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,"02 / HARDWARE",w,h);
         boolean columns=w>=420;float top=pad+(h<150?22:31),gap=h<150?6:16,sectionH=columns?h-top-pad:(h-top-pad-gap)/2,sectionW=columns?(w-pad*2-gap)/2:w-pad*2;
@@ -623,11 +647,12 @@ public class DashboardView extends View {
         switch(key) {
             case "main":gamePanel(c,w,h);break;
             case "audio":audioCard(c,w,h);break;
-            case "cpu":device(c,w,h,"CPU",object("cpu"),accent,0);break;
-            case "gpu":device(c,w,h,"GPU",object("gpu"),secondary,1);break;
+            case "cpu":if(game)standaloneHardware(c,w,h,"CPU",accent,0);else device(c,w,h,"CPU",object("cpu"),accent,0);break;
+            case "gpu":if(game)standaloneHardware(c,w,h,"GPU",secondary,1);else device(c,w,h,"GPU",object("gpu"),secondary,1);break;
             case "memory":memory(c,w,h);break;
             case "history":if(game)frameGraph(c,w,h);else graph(c,w,h);break;
-            case "side":if(game)gameHardware(c,w,h);else cooling(c,w,h);break;
+            case "side":cooling(c,w,h);break;
+            case "network":networkCard(c,w,h);break;
         }
         localCoordinates=false;c.restore();
     }
