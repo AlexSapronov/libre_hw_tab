@@ -518,8 +518,9 @@ public class DashboardView extends View {
             float y=top+i*row;int color=i==0?accent:secondary;
             if(row>=48){
                 fit(c,labels[i],pad,y+9,9,w-pad*2,color);
-                fit(c,traffic(ready?value(n,fields[i]):Double.NaN)+UiText.get(" Мбит/с"),pad,y+31,22,w-pad*2,white);
-                trend(c,"network."+fields[i],pad,y+38,w-pad*2,Math.max(4,row-44),color,false,maximum);
+                float size="network".equals(focusedMetric)?64:22;
+                fit(c,traffic(ready?value(n,fields[i]):Double.NaN)+UiText.get(" Мбит/с"),pad,y+size+9,size,w-pad*2,white);
+                trend(c,"network."+fields[i],pad,y+size+16,w-pad*2,Math.max(4,row-size-22),color,false,maximum);
             }else{
                 fit(c,(i==0?"↓ ":"↑ ")+traffic(ready?value(n,fields[i]):Double.NaN)+UiText.get(" Мбит/с"),pad,y+Math.min(17,row-8),13,w-pad*2,color);
                 trend(c,"network."+fields[i],pad,y+row-7,w-pad*2,4,color,false,maximum);
@@ -574,9 +575,10 @@ public class DashboardView extends View {
             String trendKey=index==3?"gpu.fan":"cpu."+keys[index];
             boolean calibrated=index==3?gpu!=null&&gpu.optString("name").contains("5070 Ti"):profile;
             float percent=calibrated?FanCalibration.percent(keys[index],rpm):Float.NaN;
-            boolean hasCurve=calibrated&&index!=2;
+            boolean hasCurve=calibrated;
+            String percentLabel=index==2&&Float.isFinite(rpm)&&rpm>0&&rpm<2700?"≤75%":"≈"+number(percent)+"%";
             if(rh<65){
-                fit(c,labels[index]+"  "+number(rpm)+" RPM"+(hasCurve?" / ≈"+number(percent)+"%":""),x,y+Math.min(22,rh-10),bounded(rh*.45f,9,14),cw,color);
+                fit(c,labels[index]+"  "+number(rpm)+" RPM"+(hasCurve?" / "+percentLabel:""),x,y+Math.min(22,rh-10),bounded(rh*.45f,9,14),cw,color);
                 if(hasCurve)nervSegments(c,x,y+rh-10,cw,6,percent,color,20);
                 else trend(c,trendKey,x,y+rh-8,cw,4,color,false);
                 continue;
@@ -584,9 +586,9 @@ public class DashboardView extends View {
             fit(c,labels[index],x,y+12,11,cw,color);
             float baseline=y+bounded(rh*.56f,35,65);
             // Keep the estimated percentage separate from the measured RPM.
-            fit(c,number(rpm)+" RPM",x,baseline,bounded(Math.min(cw*.14f,rh*.30f),17,34),hasCurve?cw*.68f:cw,white);
+            fit(c,number(rpm)+" RPM",x,baseline,bounded(Math.min(cw*.14f,rh*.30f),17,48),hasCurve?cw*.68f:cw,white);
             if(hasCurve){
-                p.setTextAlign(Paint.Align.RIGHT);fit(c,"≈"+number(percent)+"%",x+cw,baseline,18,cw*.30f,color);p.setTextAlign(Paint.Align.LEFT);
+                p.setTextAlign(Paint.Align.RIGHT);fit(c,percentLabel,x+cw,baseline,rh>140?30:18,cw*.30f,color);p.setTextAlign(Paint.Align.LEFT);
                 nervSegments(c,x,baseline+9,cw,Math.max(5,Math.min(18,y+rh-10-(baseline+9))),percent,color,24);
                 if(rh>140){trend(c,trendKey,x,baseline+40,cw,rh-110,color,true);}
             }else{

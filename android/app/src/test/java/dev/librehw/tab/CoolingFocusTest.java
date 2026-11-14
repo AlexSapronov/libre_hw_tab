@@ -21,7 +21,11 @@ public class CoolingFocusTest {
         assertEquals(45,FanCalibration.percent("sideFan",1080),0);
         assertEquals(65,FanCalibration.percent("sideFan",1368),0);
         assertEquals(30,FanCalibration.percent("fan",676),0);
-        assertTrue(Float.isNaN(FanCalibration.percent("pump",2700)));
+        assertEquals(75,FanCalibration.percent("pump",2700),0);
+        assertEquals(87.5,FanCalibration.percent("pump",2800),.01);
+        assertEquals(100,FanCalibration.percent("pump",2900),0);
+        assertEquals(75,FanCalibration.percent("pump",2600),0);
+        assertEquals(0,FanCalibration.percent("pump",0),0);
         assertTrue(Float.isNaN(FanCalibration.percent("fan",Float.NaN)));
     }
     @Test public void bothBlocksOpenAndReturnWithoutChangingLayout() throws Exception {
