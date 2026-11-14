@@ -9,13 +9,13 @@ final class MediaClient {
         HttpURLConnection c=(HttpURLConnection)new URL(address+path).openConnection();c.setConnectTimeout(1800);c.setReadTimeout(1800);c.setInstanceFollowRedirects(false);c.setRequestProperty("X-Libre-Token",token);return c;
     }
     static void control(String address,String token,String id,String action,double position) throws Exception {
-        if(!id.matches("[a-f0-9]{32}"))throw new IOException("Медиасессия изменилась");
+        if(!id.matches("[a-f0-9]{32}"))throw new IOException(UiText.get("Медиасессия изменилась"));
         HttpURLConnection c=open(address,token,"/api/v1/media/control");
         try {
             c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
             JSONObject body=new JSONObject().put("id",id).put("action",action);if(action.equals("seek"))body.put("position",position);
             try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
-            if(c.getResponseCode()!=200)throw new IOException(c.getResponseCode()==409?"Видео изменилось или команда недоступна":"Нет связи с медиаплеером");
+            if(c.getResponseCode()!=200)throw new IOException(c.getResponseCode()==409?UiText.get("Видео изменилось или команда недоступна"):UiText.get("Нет связи с медиаплеером"));
         }finally{c.disconnect();}
     }
     static Bitmap thumbnail(String address,String token,String id) throws Exception {

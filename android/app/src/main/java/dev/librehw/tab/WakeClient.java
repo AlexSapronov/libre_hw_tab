@@ -4,14 +4,14 @@ import org.json.*;
 final class WakeClient {
     static byte[] packet(String mac) {
         String hex=mac.replace(":","").replace("-","");
-        if(!hex.matches("[0-9a-fA-F]{12}"))throw new IllegalArgumentException("MAC должен содержать 12 шестнадцатеричных цифр");
-        if(hex.matches("0{12}|[fF]{12}") || (Integer.parseInt(hex.substring(0,2),16)&1)!=0)throw new IllegalArgumentException("Нужен unicast MAC сетевой карты ПК");
+        if(!hex.matches("[0-9a-fA-F]{12}"))throw new IllegalArgumentException(UiText.get("MAC должен содержать 12 шестнадцатеричных цифр"));
+        if(hex.matches("0{12}|[fF]{12}") || (Integer.parseInt(hex.substring(0,2),16)&1)!=0)throw new IllegalArgumentException(UiText.get("Нужен unicast MAC сетевой карты ПК"));
         byte[] packet=new byte[102];for(int i=0;i<6;i++)packet[i]=(byte)255;
         for(int i=0;i<16;i++)for(int j=0;j<6;j++)packet[6+i*6+j]=(byte)Integer.parseInt(hex.substring(j*2,j*2+2),16);
         return packet;
     }
     static void send(JSONArray targets) throws Exception {
-        if(targets.length()==0)throw new Exception("Сначала подключись к ПК для сохранения MAC или укажи его в настройках");
+        if(targets.length()==0)throw new Exception(UiText.get("Сначала подключись к ПК для сохранения MAC или укажи его в настройках"));
         int sent=0;
         try(DatagramSocket socket=new DatagramSocket()) {
             socket.setBroadcast(true);
@@ -24,7 +24,7 @@ final class WakeClient {
                 }
             }
         }
-        if(sent==0)throw new Exception("Нет корректного адреса Wake-on-LAN");
+        if(sent==0)throw new Exception(UiText.get("Нет корректного адреса Wake-on-LAN"));
     }
     private static boolean localBroadcast(String address) {
         if("255.255.255.255".equals(address))return true;
