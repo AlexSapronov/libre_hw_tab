@@ -7,7 +7,7 @@ import org.json.*;
 import java.util.*;
 
 /** A native Canvas dashboard: no WebView, remote fonts, or browser dependencies. */
-public final class DashboardView extends View {
+public class DashboardView extends View {
     private final Paint p = new Paint(3);
     private final Runnable settings, theme;
     private static final class ThermalPoint {
