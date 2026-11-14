@@ -42,6 +42,7 @@ public class DashboardTest {
         data.getJSONObject("game").put("active",true);
         view.accept(data,"",true); render(view,"game-eva");
         view.themeId=0; render(view,"game-jade");
+        view.animations=false;
         for(int theme=0;theme<DashboardTheme.ALL.length;theme++) {
             view.themeId=theme;view.mode=0;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-game");
             view.mode=1;render(view,"theme-"+DashboardTheme.ALL[theme].name.toLowerCase()+"-overview");

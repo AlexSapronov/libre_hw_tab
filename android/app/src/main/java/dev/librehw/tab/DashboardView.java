@@ -239,7 +239,7 @@ public class DashboardView extends View {
     private void drawTerminalFrame(Canvas c,DashboardTheme palette) {
         for(int x=36;x<=1164;x+=24)line(c,x,112,x,116,surface(0,70),1);
         line(c,36,112,1164,112,tint(accent,60),1);
-        line(c,36,68,285,68,tint(accent,110),1);
+        if(!standby())line(c,36,68,285,68,tint(accent,110),1);
         if(!standby()){
             text(c,"TACTICAL TELEMETRY / "+palette.name,36,748,9,tint(accent,190),medium);
             text(c,"MAGI SYSTEM / LOCAL MONITOR",900,748,9,muted,regular);
