@@ -25,8 +25,8 @@ public class ResponsiveCardsTest {
             for(String other:DashboardLayout.keys(game))if(!other.equals(key))view.layout.hidden.add(DashboardLayout.id(other,game));
             view.layout.positions.put(DashboardLayout.id(key,game),new RectF(36,125,736,375));
             Bitmap bitmap=render(view,"reflow-wide-"+key);
-            float scale=800f/760f,dx=(1340-1200*scale)/2;int content=0;
-            for(int y=(int)(145*scale);y<195*scale;y++)for(int x=(int)(dx+54*scale);x<dx+110*scale;x++) {
+            float scale=800f/760f;int content=0;
+            for(int y=(int)(145*scale);y<195*scale;y++)for(int x=(int)(view.screenX(54));x<view.screenX(110);x++) {
                 int color=bitmap.getPixel(x,y);if(Color.red(color)>160 && Color.green(color)>60)content++;
             }
             assertTrue(key+" must place content near its actual leading padding",content>20);bitmap.recycle();

@@ -46,7 +46,7 @@ public class AudioPanelTest {
         assertEquals(264,migrated.rect("cpu",false).width(),0);assertFalse(migrated.metric("power"));assertTrue(migrated.valid(true));assertEquals(436,migrated.rect("main",true).width(),0);assertEquals(493,migrated.rect("memory",true).top,0);
         assertEquals(2,new JSONObject(migrated.json()).getInt("version"));assertEquals(migrated.json(),DashboardLayout.parse(migrated.json()).json());
     }
-    private void touch(DashboardView view,int action,float x,float y){float scale=800f/760f,dx=(1340-1200*scale)/2;view.onTouchEvent(MotionEvent.obtain(0,0,action,dx+x*scale,y*scale,0));}
+    private void touch(DashboardView view,int action,float x,float y){view.onTouchEvent(MotionEvent.obtain(0,0,action,view.screenX(x),view.screenY(y),0));}
     private void render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));File folder=new File("build/screenshots");folder.mkdirs();try(FileOutputStream out=new FileOutputStream(new File(folder,name+".png"))){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));}bitmap.recycle();
     }

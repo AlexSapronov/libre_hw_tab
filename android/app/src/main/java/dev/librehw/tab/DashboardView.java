@@ -129,7 +129,11 @@ public class DashboardView extends View {
     public int mode; // 0 automatic, 1 overview, 2 game
     public Runnable onModeChange = () -> { mode=(mode+1)%3; invalidate(); };
     private final RectF modeHit = new RectF(410,20,654,86);
-    private float scale = 1, offsetX, offsetY;
+    // Retain saved layout coordinates, but fill the physical display on both axes.
+    // Trim the old 36-unit gutters to a small 12-unit drawing inset.
+    private static final float VIEWPORT_LEFT=24, VIEWPORT_WIDTH=1152, VIEWPORT_HEIGHT=760;
+    float screenX(float x){return (x-VIEWPORT_LEFT)*getWidth()/VIEWPORT_WIDTH;}
+    float screenY(float y){return y*getHeight()/VIEWPORT_HEIGHT;}
     private int accent, secondary, panel;
     private final int white = Color.rgb(236, 244, 249), muted = Color.rgb(134, 153, 173);
     private final Typeface terminal = Typeface.create("monospace", Typeface.BOLD);
@@ -196,9 +200,8 @@ public class DashboardView extends View {
         nerv=palette.isNerv();
         accent=palette.primary;secondary=palette.secondary;panel=palette.panel;
         c.drawColor(palette.background);
-        scale = Math.min(getWidth()/1200f, getHeight()/760f);
-        offsetX = (getWidth()-1200*scale)/2; offsetY = (getHeight()-760*scale)/2;
-        c.save(); c.translate(offsetX, offsetY); c.scale(scale, scale);
+        if(getWidth()==0 || getHeight()==0)return;
+        c.save();c.scale(getWidth()/VIEWPORT_WIDTH,getHeight()/VIEWPORT_HEIGHT);c.translate(-VIEWPORT_LEFT,0);
         p.setShader(new RadialGradient(300, 100, 750, palette.glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,1200,760,p); p.setShader(null);
         if(nerv)drawTerminalFrame(c,palette);
@@ -698,7 +701,8 @@ public class DashboardView extends View {
         }
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
-        float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
+        if(getWidth()==0 || getHeight()==0)return false;
+        float x=event.getX()*VIEWPORT_WIDTH/getWidth()+VIEWPORT_LEFT,y=event.getY()*VIEWPORT_HEIGHT/getHeight();
         if(!editing && event.getAction()==MotionEvent.ACTION_DOWN){
             pressedAudio=audioAt(x,y);
             if(pressedAudio!=null && pressedAudio.action.equals("volume")){
