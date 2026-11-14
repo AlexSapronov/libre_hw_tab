@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class AudioPanelTest {
     private MediaPanelTest.FeedbackView view() throws Exception {
-        MediaPanelTest.FeedbackView view=new MediaPanelTest.FeedbackView();view.layout(0,0,1340,800);view.animations=false;view.themeId=6;view.mode=2;view.accept(DemoData.sample(),"",true);return view;
+        MediaPanelTest.FeedbackView view=new MediaPanelTest.FeedbackView();view.layout(0,0,1340,800);view.animations=false;view.themeId=6;view.mode=2;for(int i=0;i<61;i++){JSONObject sample=DemoData.sample();sample.getJSONObject("game").put("fps",130+Math.sin(i/8.)*25);view.accept(sample,"",true);org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(1));}return view;
     }
     @Test public void MixerSharesStockCardSizeAndExistsOnlyOnGameScreen() throws Exception {
         DashboardView view=view();RectF audio=view.layout.rect("audio",true),cpu=view.layout.rect("cpu",false),main=view.layout.rect("main",true);

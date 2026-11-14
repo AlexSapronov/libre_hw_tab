@@ -19,3 +19,11 @@ AndroidX Activity and transitive AndroidX dependencies: Apache-2.0, https://andr
 PresentMon standalone 2.6.0 x64 (unmodified official binary), MIT license, https://github.com/GameTechDev/PresentMon/tree/v2.6.0 . Full license accompanies the binary as PresentMon-LICENSE.txt; binary SHA-256 b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af.
 
 Windows audio mixer: NAudio.Wasapi / NAudio.Core 2.2.1, MIT license, https://github.com/naudio/NAudio/tree/v2.2.1 . Windows Core Audio session volumes and endpoint microphone mute are used; audio is not recorded.
+
+Copyright 2020 Mark Heath
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
