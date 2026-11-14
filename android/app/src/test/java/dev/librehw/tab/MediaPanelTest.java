@@ -34,7 +34,7 @@ public class MediaPanelTest {
         sample.getJSONObject("media").put("canSeek",false);view.accept(sample,"",true);touch(view,522,675);assertEquals(.5,fraction[0],.01);
         view.mode=2;render(view,"nerv-media-game");view.themeId=0;render(view,"jade-media-game");
         assertEquals(layout,view.layout.json());view.editing=true;assertFalse(view.mediaVisible());view.editing=false;
-        view.accept(DemoData.sample(),"",true);assertFalse(view.mediaVisible());view.themeId=6;view.mode=1;render(view,"nerv-resource-overview");view.mode=2;render(view,"nerv-frame-time");
+        view.accept(DemoData.sample(),"",true);assertTrue(view.mediaVisible());org.robolectric.shadows.ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);assertFalse(view.mediaVisible());view.themeId=6;view.mode=1;render(view,"nerv-resource-overview");view.mode=2;render(view,"nerv-frame-time");
         view.accept(null,"offline",false);assertFalse(view.mediaVisible());
     }
     @Test public void TimelineFormatsHoursAndLongTitlesStayInsidePanel() throws Exception {
@@ -42,6 +42,33 @@ public class MediaPanelTest {
         DashboardView view=view();JSONObject media=media().put("title","Очень длинное название видео ".repeat(15)).put("playing",false);
         view.accept(DemoData.sample().put("media",media),"",true);render(view,"nerv-media-paused");
     }
+    static class FeedbackView extends DashboardView {
+        int haptics;
+        FeedbackView(){super(RuntimeEnvironment.getApplication(),()->{},()->{});}
+        @Override public boolean performHapticFeedback(int constant){haptics++;return true;}
+    }
+    @Test public void TrackGapKeepsOldCardThenReplacesItAndNeverKeepsOfflineMedia() throws Exception {
+        DashboardView view=view();view.accept(DemoData.sample().put("media",media()),"",true);
+        String old=view.media().getString("id");Bitmap cover=Bitmap.createBitmap(16,16,Bitmap.Config.ARGB_8888);view.mediaThumbnail=cover;
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(Duration.ofSeconds(1));view.accept(DemoData.sample(),"",true);
+        assertTrue(view.mediaVisible());assertEquals(old,view.media().getString("id"));assertSame(cover,view.mediaThumbnail);
+        render(view,"media-track-gap");
+        JSONObject next=media().put("id","abcdefabcdefabcdefabcdefabcdefab").put("title","Следующее видео");
+        view.accept(DemoData.sample().put("media",next),"",true);assertEquals("Следующее видео",view.media().getString("title"));
+        view.accept(null,"offline",false);assertFalse(view.mediaVisible());
+        view.accept(DemoData.sample().put("media",next),"",true);org.robolectric.shadows.ShadowSystemClock.advanceBy(Duration.ofSeconds(6));view.accept(DemoData.sample(),"",true);assertFalse(view.mediaVisible());
+    }
+    @Test public void ButtonsAnimateAndVibrateOnlyWhenEnabledAndCancelledGestureDoesNotSendCommand() throws Exception {
+        FeedbackView view=new FeedbackView();view.layout(0,0,1340,800);view.themeId=6;view.animations=true;
+        view.accept(DemoData.sample().put("media",media()),"",true);render(view,"media-feedback-idle");
+        int[] clicks={0};view.onMedia=(a,f)->clicks[0]++;
+        gesture(view,MotionEvent.ACTION_DOWN,1100,645);assertEquals(1,view.haptics);render(view,"media-feedback-pressed");
+        gesture(view,MotionEvent.ACTION_UP,1100,645);assertEquals(1,clicks[0]);render(view,"media-feedback-release");
+        gesture(view,MotionEvent.ACTION_DOWN,900,645);gesture(view,MotionEvent.ACTION_UP,900,645);assertEquals(1,view.haptics);assertEquals(1,clicks[0]);
+        gesture(view,MotionEvent.ACTION_DOWN,1100,645);gesture(view,MotionEvent.ACTION_MOVE,800,550);gesture(view,MotionEvent.ACTION_UP,1100,645);assertEquals(1,clicks[0]);
+        view.mediaCommandPending=true;gesture(view,MotionEvent.ACTION_DOWN,1100,645);gesture(view,MotionEvent.ACTION_UP,1100,645);assertEquals(2,view.haptics);assertEquals(1,clicks[0]);render(view,"media-feedback-pending");
+    }
+    private void gesture(DashboardView view,int action,float x,float y){float scale=800f/760f,dx=(1340-1200*scale)/2;view.onTouchEvent(MotionEvent.obtain(0,0,action,dx+x*scale,y*scale,0));}
     private void touch(DashboardView view,float x,float y){float scale=800f/760f,dx=(1340-1200*scale)/2;view.onTouchEvent(MotionEvent.obtain(0,0,MotionEvent.ACTION_UP,dx+x*scale,y*scale,0));}
     private void render(DashboardView view,String name) throws Exception {
         Bitmap bitmap=Bitmap.createBitmap(1340,800,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));
