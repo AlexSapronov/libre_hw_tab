@@ -17,7 +17,7 @@ public class MediaPanelTest {
     private DashboardView view() throws Exception {
         DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;view.themeId=6;
         for(int i=0;i<180;i++) {
-            JSONObject sample=DemoData.sample();sample.getJSONObject("cpu").put("load",25+Math.sin(i/8.)*20);sample.getJSONObject("gpu").put("load",70+Math.sin(i/14.)*20);
+            JSONObject sample=DemoData.sample();sample.getJSONObject("cpu").put("load",25+Math.sin(i/8.)*20);sample.getJSONObject("gpu").put("load",70+Math.sin(i/14.)*20);sample.getJSONObject("memory").put("load",48+Math.sin(i/20.)*8);
             view.accept(sample,"",true);org.robolectric.shadows.ShadowSystemClock.advanceBy(Duration.ofSeconds(1));
         }
         return view;

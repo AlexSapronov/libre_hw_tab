@@ -12,7 +12,7 @@ public final class DashboardView extends View {
     private final Runnable settings, theme;
     private static final class ThermalPoint {
         final long time; final float[] values;
-        ThermalPoint(long time,float cpu,float gpu,float cpuLoad,float gpuLoad){this.time=time;values=new float[]{cpu,gpu,cpuLoad,gpuLoad};}
+        ThermalPoint(long time,float cpu,float gpu,float cpuLoad,float gpuLoad,float memoryLoad){this.time=time;values=new float[]{cpu,gpu,cpuLoad,gpuLoad,memoryLoad};}
     }
     private final ArrayDeque<ThermalPoint> history = new ArrayDeque<>();
     private JSONObject sample;
@@ -66,7 +66,7 @@ public final class DashboardView extends View {
     public void accept(JSONObject data, String error, boolean demo) {
         sample = data;mediaReceived=android.os.SystemClock.elapsedRealtime(); if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
-        history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature"),value(object("cpu"),"load"),value(object("gpu"),"load")));
+        history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature"),value(object("cpu"),"load"),value(object("gpu"),"load"),value(object("memory"),"load")));
         while (!history.isEmpty() && (now-history.peekFirst().time>180000 || history.size()>1000))history.removeFirst();
         invalidate();
     }
@@ -210,10 +210,7 @@ public final class DashboardView extends View {
         if(nerv) {
             text(c,"UTILIZATION",x+263,y+112,10,muted,medium);
             text(c,number(load)+"%",x+263,y+173,49,white,digits);
-            for(int i=0;i<16;i++) {
-                p.setColor(Float.isFinite(load)&&i<Math.ceil(Math.max(0,Math.min(100,load))/100*16)?(load>=90?secondary:color):0xFF38222A);
-                float sx=x+263+i*8.8f;Path segment=new Path();segment.moveTo(sx+3,y+192);segment.lineTo(sx+8,y+192);segment.lineTo(sx+5,y+213);segment.lineTo(sx,y+213);segment.close();c.drawPath(segment,p);
-            }
+            nervSegments(c,x+263,y+192,140,21,load,color,16);
             loadSpark(c,x+263,y+231,140,24,series+2,color);
         }else {
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(10); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF253245);
@@ -292,6 +289,16 @@ public final class DashboardView extends View {
         box(c,36,top,270,690-top,panel);
         text(c,"03   /   MEMORY",60,top+33,13,accent,medium);
         JSONObject ram = object("memory"); float used=value(ram,"used"), total=value(ram,"total"), load=value(ram,"load");
+        if(nerv) {
+            float height=690-top;
+            int color=Float.isFinite(load)&&load>=90?secondary:accent;
+            text(c,number(load)+"%",60,top+85,44,white,digits);
+            text(c,decimal(used)+" / "+number(total)+" GB",60,top+110,16,muted,digits);
+            nervSegments(c,60,top+122,222,18,load,color,24);
+            loadSpark(c,60,top+153,222,height-178,4,color);
+            text(c,"MEMORY LOAD / 60 С",60,681,9,muted,medium);
+            return;
+        }
         text(c,decimal(used),60,top+87,42,white,digits);
         text(c,"/ "+number(total)+" GB",183,top+83,20,muted,digits);
         for (int i=0;i<24;i++) box(c,60+i*9.2f,top+107,6,24,Float.isFinite(load) && i<load/100*24 ? accent:0xFF263446);
@@ -317,6 +324,14 @@ public final class DashboardView extends View {
             p.setColor(series==0?accent:secondary); p.setStrokeWidth(2.5f); p.setStyle(Paint.Style.STROKE); p.setStrokeJoin(Paint.Join.ROUND); c.drawPath(path,p); p.setStyle(Paint.Style.FILL);
         }
         text(c,"−180 с",348,675,10,muted,regular); text(c,"−90 с",587,675,10,muted,regular); text(c,"СЕЙЧАС",821,675,10,muted,regular);
+    }
+    private void nervSegments(Canvas c,float left,float top,float width,float height,float load,int color,int count) {
+        float step=width/count;
+        for(int i=0;i<count;i++) {
+            p.setColor(Float.isFinite(load)&&i<Math.ceil(Math.max(0,Math.min(100,load))/100*count)?(load>=90?secondary:color):0xFF38222A);
+            float x=left+i*step,slant=Math.min(3,step/3);Path segment=new Path();
+            segment.moveTo(x+slant,top);segment.lineTo(x+step-1,top);segment.lineTo(x+step-1-slant,top+height);segment.lineTo(x,top+height);segment.close();c.drawPath(segment,p);
+        }
     }
     private void loadSpark(Canvas c,float left,float top,float width,float height,int series,int color) {
         Path path=new Path();boolean started=false;long now=android.os.SystemClock.elapsedRealtime();
