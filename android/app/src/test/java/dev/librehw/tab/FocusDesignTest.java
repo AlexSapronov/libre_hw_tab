@@ -48,6 +48,18 @@ public class FocusDesignTest {
         tap(v,140,250);assertEquals("cpu",v.focusedMetric);
         v.forceStandby=true;render(v,"focus-standby");assertNull(v.focusedMetric);
     }
+    @Test public void headerGlyphsKeepTheirProportionsOnWideDisplays() throws Exception {
+        int previousWidth=-1;
+        for(int width:new int[]{1340,2400}){
+            DashboardView v=view(width,800);Bitmap b=Bitmap.createBitmap(width,800,Bitmap.Config.ARGB_8888);v.draw(new Canvas(b));
+            int start=Math.round(v.screenX(36)),left=width,right=0;
+            for(int x=start;x<start+110;x++)for(int y=25;y<60;y++){
+                int color=b.getPixel(x,y);
+                if(Color.red(color)>150 && Color.blue(color)>200){left=Math.min(left,x);right=Math.max(right,x);}
+            }
+            assertTrue(right>left);if(previousWidth>=0)assertEquals(previousWidth,right-left,1);previousWidth=right-left;b.recycle();
+        }
+    }
     @Test public void themesDetailLevelsAndStatusRemainReadable() throws Exception {
         DashboardView v=view(1920,1080);
         for(int theme=6;theme<DashboardTheme.ALL.length;theme++)for(int detail=0;detail<3;detail++){

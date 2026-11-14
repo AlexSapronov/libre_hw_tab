@@ -677,7 +677,8 @@ public class DashboardView extends View {
         box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?0xFF263C43:powerColor);
         int ink=waking?white:0xFF09121C;
         p.setColor(ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
-        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);
+        c.save();c.translate(90,627);c.scale(1/aspectRatio(),1);c.translate(-90,-627);
+        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);c.restore();
         p.setStyle(Paint.Style.FILL);p.setStrokeCap(Paint.Cap.BUTT);
         text(c,waking?"КОМАНДА ОТПРАВЛЕНА":"ВКЛЮЧИТЬ ПК",145,618,28,ink,medium);
         text(c,waking?"ЖДУ ПОДКЛЮЧЕНИЯ…":"ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN",145,654,13,ink,regular);
@@ -762,7 +763,7 @@ public class DashboardView extends View {
         long age=Math.max(0,(android.os.SystemClock.elapsedRealtime()-lastGood)/1000);
         String link=sample==null?"SIGNAL LOST":demo?"DEMO":sample.isNull("sensorError")?"LINK ONLINE":"SENSOR ERROR";
         String ageText=!receivedSample?"НЕТ ПАКЕТА":(demo?"ДЕМО-ПАКЕТ ":"ПАКЕТ ")+age+" С НАЗАД";
-        String state=standby()?"STANDBY":focusedMetric!=null?"FOCUS / "+focusedMetric.toUpperCase(Locale.ROOT):playing()?"GAME":"OVERVIEW";
+        String state=standby()?"STANDBY":focusedMetric!=null?"FOCUS / "+(focusedMetric.equals("main")?"FPS":focusedMetric.toUpperCase(Locale.ROOT)):playing()?"GAME":"OVERVIEW";
         JSONObject audio=audio(),mic=audio==null?null:audio.optJSONObject("microphone");
         return link+"  /  "+ageText+"  /  "+state+(sample!=null&&mic!=null&&mic.optBoolean("available")&&mic.optBoolean("muted")?"  /  MIC CUT":"");
     }
