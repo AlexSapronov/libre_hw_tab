@@ -217,8 +217,8 @@ public final class DashboardView extends View {
             for(int i=0;i<3;i++) {
                 int fps=new int[]{60,120,240}[i];float y=area.top+i*row;
                 boolean met=Float.isFinite(frame)&&frame<=1000f/fps;
-                text(c,fps+" FPS",area.right-94,y+12,10,met?accent:muted,medium);
-                for(int n=0;n<7;n++){p.setColor(Float.isFinite(frame)?met?accent:secondary:0xFF38222A);c.drawRect(area.right-94+n*12,y+18,area.right-86+n*12,y+24,p);}
+                text(c,fps+" FPS",area.right-94,y+Math.min(11,row*.48f),row<25?8:10,met?accent:muted,medium);
+                for(int n=0;n<7;n++){p.setColor(Float.isFinite(frame)?met?accent:secondary:0xFF38222A);c.drawRect(area.right-94+n*12,y+row*.60f,area.right-86+n*12,y+row*.60f+Math.max(2,row*.18f),p);}
             }
         }
     }
@@ -251,7 +251,7 @@ public final class DashboardView extends View {
         float firstW=columns?(w-pad*3)*.61f:w-pad*2,loadX=columns?pad+firstW+pad:pad;
         float tempSize=bounded(Math.min(firstW*.65f,bodyH*.65f),25,84);
         if(layout.metric("temperature")) {
-            fit(c,number(value(data,"temperature"))+"°C",pad,body+tempSize,tempSize,firstW,white);
+            valueWithUnit(c,number(value(data,"temperature")),pad,body+tempSize,tempSize,"°C",bounded(tempSize*.30f,12,24),tempSize*.43f,color);
             if(bodyH>70)text(c,"ТЕМПЕРАТУРА",pad,body+tempSize+20,10,color,medium);
         }
         if(layout.metric("load")) {
@@ -295,7 +295,7 @@ public final class DashboardView extends View {
             if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
         float baseline=r.top+tempSize+27;
-        if(layout.metric("temperature")){fit(c,number(temperature)+"°C",r.left,baseline,tempSize,r.width(),white);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
+        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,color);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
         if(layout.metric("load")) {
             float barY=layout.metric("temperature")?r.top+r.height()*.73f:r.top+65;
             text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
@@ -316,7 +316,7 @@ public final class DashboardView extends View {
             float rpm=value(index==3?gpu:cpu,keys[index].equals("gpuFan")?"fan":keys[index]);int color=index==3?secondary:accent;
             if(rh<65){fit(c,labels[index]+"  "+number(rpm)+" RPM",x,y+Math.min(25,rh-3),bounded(rh*.55f,9,14),cw,color);continue;}
             fit(c,labels[index],x,y+12,11,cw,color);
-            fit(c,number(rpm)+" RPM",x,y+bounded(rh*.56f,35,65),bounded(Math.min(cw*.21f,rh*.35f),20,44),cw,white);
+            valueWithUnit(c,number(rpm),x,y+bounded(rh*.56f,35,65),bounded(Math.min(cw*.21f,rh*.35f),20,44),"RPM",12,3,muted);
             if(rh>90)fit(c,sources[index],x,y+rh-14,10,cw,muted);
             if(n<count-1)line(c,x,y+rh-4,x+cw,y+rh-4,0xFF56313B,1);
         }
@@ -364,13 +364,13 @@ public final class DashboardView extends View {
     private void memory(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,"03 / MEMORY",w,h);JSONObject ram=object("memory");
         float load=value(ram,"load"),used=value(ram,"used"),total=value(ram,"total");int color=Float.isFinite(load)&&load>=90?secondary:accent;
-        boolean wide=w>=400 && h>=160;float mainW=wide?w*.40f:w-pad*2,body=pad+27;
+        boolean wide=w>=400 && h>=160;float mainW=wide?w*.40f:w-pad*2,body=pad+24;
         float size=bounded(Math.min(mainW*.30f,h*.24f),24,64);
         fit(c,number(load)+"%",pad,body+size,size,mainW,color);
-        fit(c,decimal(used)+" / "+number(total)+" GB",pad,body+size+23,Math.min(18,w*.06f),mainW,muted);
-        float barY=body+size+36;
+        fit(c,decimal(used)+" / "+number(total)+" GB",pad,body+size+19,Math.min(18,w*.06f),mainW,muted);
+        float barY=body+size+30;
         if(barY+14<h-pad){if(nerv)nervSegments(c,pad,barY,mainW,18,load,color,24);else for(int i=0;i<24;i++)box(c,pad+i*mainW/24,barY,mainW/24-2,18,Float.isFinite(load)&&i<Math.ceil(load/100*24)?color:0xFF263446);}
-        RectF spark=wide?new RectF(w*.47f,body+10,w-pad,h-pad-16):new RectF(pad,barY+35,w-pad,h-pad-16);
+        RectF spark=wide?new RectF(w*.47f,body+10,w-pad,h-pad-16):new RectF(pad,barY+25,w-pad,h-pad-12);
         if(spark.height()>=16){loadSpark(c,spark.left,spark.top,spark.width(),spark.height(),4,color);text(c,"MEMORY LOAD / 60 С",spark.left,h-pad+2,9,muted,medium);}
     }
     private void chartGrid(Canvas c,RectF plot,float maximum,boolean percent) {

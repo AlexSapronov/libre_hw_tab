@@ -15,7 +15,7 @@ import static org.junit.Assert.*;
 public class ResponsiveCardsTest {
     private DashboardView view() throws Exception {
         DashboardView view=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});view.layout(0,0,1340,800);view.animations=false;view.themeId=6;
-        for(int i=0;i<181;i++){view.accept(DemoData.sample(),"",true);ShadowSystemClock.advanceBy(Duration.ofSeconds(1));}
+        for(int i=0;i<181;i++){JSONObject data=DemoData.sample();data.getJSONObject("game").put("fps",120+Math.sin(i/12.)*35);view.accept(data,"",true);ShadowSystemClock.advanceBy(Duration.ofSeconds(1));}
         return view;
     }
     @Test public void WideCardsReflowContentToLeadingEdgeInsteadOfCenteringOldSizedCard() throws Exception {
