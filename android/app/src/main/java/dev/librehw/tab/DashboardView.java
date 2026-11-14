@@ -20,8 +20,21 @@ public class DashboardView extends View {
     private final ArrayDeque<ThermalPoint> history = new ArrayDeque<>();
     private JSONObject sample;
     private String error = "Ожидание подключения";
-    private boolean demo;
+    private boolean demo,receivedSample;
     public int themeId;
+    public int detailLevel=1; // 0 clean, 1 NERV, 2 full MAGI
+    static final String[] DETAIL_LABELS={"Чистый","NERV","Полный MAGI"};
+    static final int ALERT=0xFFFF5364;
+    String focusedMetric;
+    private String focusGesture;
+    private float focusDownX,focusDownY;
+    private final Map<String,RectF> focusTargets=new LinkedHashMap<>();
+    private boolean localCoordinates;
+    private DashboardTheme palette;
+    private final RectF focusArea=new RectF(36,125,1164,704);
+    public boolean closeFocus(){if(focusedMetric==null)return false;focusedMetric=null;focusGesture=null;invalidate();return true;}
+    float aspectRatio(){return (getWidth()/VIEWPORT_WIDTH)/(getHeight()/VIEWPORT_HEIGHT);}
+    private float textRatio(){return localCoordinates?1:aspectRatio();}
     DashboardLayout layout=new DashboardLayout();
     public boolean editing,forceStandby,autoStandby=true,animations=true;
     public JSONObject weather;
@@ -45,10 +58,10 @@ public class DashboardView extends View {
     }
     JSONObject audio(){return audioOverride!=null&&android.os.SystemClock.elapsedRealtime()<audioOverrideUntil?audioOverride:object("audio");}
     public void audioAcknowledged(JSONObject value){audioOverride=value;audioOverrideUntil=android.os.SystemClock.elapsedRealtime()+700;invalidate();}
-    private AudioControl audioAt(float x,float y){if(editing||!playing()||standby()||audioCommandPending)return null;for(AudioControl control:audioControls.values())if(control.enabled&&control.hit.contains(x,y))return control;return null;}
+    private AudioControl audioAt(float x,float y){if(editing||focusedMetric!=null||!playing()||standby()||audioCommandPending)return null;for(AudioControl control:audioControls.values())if(control.enabled&&control.hit.contains(x,y))return control;return null;}
     private void registerAudio(String key,String id,String action,RectF localHit,RectF localTrack,boolean enabled,boolean muted,boolean vertical) {
         RectF origin=drawnCards.get("audio");if(origin==null)return;
-        RectF hit=new RectF(localHit),track=new RectF(localTrack);hit.offset(origin.left,origin.top);track.offset(origin.left,origin.top);
+        RectF hit=designRect(localHit),track=designRect(localTrack);hit.offset(origin.left,origin.top);track.offset(origin.left,origin.top);
         audioControls.put(key+"."+action,new AudioControl(key,id,action,hit,track,enabled&&!audioCommandPending,muted,vertical));
     }
     private void audioCard(Canvas c,float w,float h) {
@@ -56,9 +69,9 @@ public class DashboardView extends View {
         JSONObject state=audio(),mic=state==null?null:state.optJSONObject("microphone");boolean ready=state!=null&&state.optBoolean("ready");
         boolean micAvailable=ready&&mic!=null&&mic.optBoolean("available"),micMuted=mic!=null&&mic.optBoolean("muted"),mixed=mic!=null&&mic.optBoolean("mixed");
         RectF microphone=new RectF(pad,pad+20,w-pad,pad+20+(compact?bounded(h*.24f,20,38):bounded(h*.18f,42,60)));
-        int micColor=!micAvailable?muted:mixed?0xFFFFC36A:micMuted?secondary:accent;
+        int micColor=!micAvailable?muted:mixed?0xFFFFC36A:micMuted?ALERT:accent;
         box(c,microphone.left,microphone.top,microphone.width(),microphone.height(),surface(0xFF263446,35));
-        String status=!ready?state==null?"ОБНОВИ АГЕНТ ПК":"ЗВУК НЕДОСТУПЕН":!micAvailable?"МИКРОФОН НЕДОСТУПЕН":mixed?"МИКРОФОН / MIXED":micMuted?"МИКРОФОН / MUTED":"МИКРОФОН / ON";
+        String status=!ready?state==null?"ОБНОВИ АГЕНТ ПК":"ЗВУК НЕДОСТУПЕН":!micAvailable?"МИКРОФОН НЕДОСТУПЕН":mixed?"МИКРОФОН / MIXED":micMuted?"MIC CUT / МИКРОФОН":"МИКРОФОН / ON";
         fit(c,status,microphone.left+10,microphone.centerY()+(compact?4:micAvailable?-3:5),compact?11:18,microphone.width()-20,micColor);
         if(!compact&&micAvailable)fit(c,"ВСЕ ВХОДЫ WINDOWS · "+mic.optInt("devices")+(audioCommandPending&&pendingAudioKey.equals("microphone")?" · КОМАНДА…":""),microphone.left+10,microphone.bottom-8,9,microphone.width()-20,muted);
         registerAudio("microphone",mic==null?"":mic.optString("id"),"mute",microphone,microphone,micAvailable,micMuted,false);
@@ -70,7 +83,7 @@ public class DashboardView extends View {
             double volume=bus==null?0:bus.optDouble("volume",0);
             if(audioDrag!=null&&audioDrag.key.equals(key)&&Double.isFinite(audioPreview))volume=audioPreview;
             else if(audioCommandPending&&pendingAudioKey.equals(key)&&Double.isFinite(pendingAudioVolume))volume=pendingAudioVolume;
-            volume=Math.max(0,Math.min(1,volume));int color=!available?muted:isMuted?secondary:accent;
+            volume=Math.max(0,Math.min(1,volume));int color=!available?muted:isMuted?ALERT:accent;
             float top=rowsTop+i*rowHeight;String reading=available?Math.round(volume*100)+"%"+(bus.optBoolean("mixed")?"*":""):"—";
             RectF track,hit;
             if(rowHeight<36) {
@@ -93,7 +106,7 @@ public class DashboardView extends View {
                 if(i<2)line(c,pad,top+rowHeight-3,w-pad,top+rowHeight-3,surface(0xFF38222A,24),1);
             }
             line(c,track.left,track.top,track.right,track.top,surface(0xFF3D4555,65),rowHeight<36?4:7);
-            if(available){float x=track.left+(float)volume*track.width();line(c,track.left,track.top,x,track.top,color,rowHeight<36?4:7);p.setColor(white);c.drawCircle(x,track.top,rowHeight<36?3:7,p);}
+            if(available){float x=track.left+(float)volume*track.width();line(c,track.left,track.top,x,track.top,color,rowHeight<36?4:7);p.setColor(white);circle(c,x,track.top,rowHeight<36?3:7,p);}
             registerAudio(key,id,"volume",hit,track,available,isMuted,false);
         }
         if(audioCommandPending){float x=pad+(animations?(android.os.SystemClock.elapsedRealtime()%1000)/1000f*(w-pad*2-30):0);line(c,x,h-3,x+30,h-3,accent,2);if(animations)postInvalidateOnAnimation();}
@@ -108,7 +121,7 @@ public class DashboardView extends View {
     private long releasedAt;
     private final RectF mediaPrevious=new RectF(877,605,957,685),mediaToggle=new RectF(973,605,1053,685),mediaNext=new RectF(1069,605,1149,685),mediaSeek=new RectF(204,657,840,691);
     public JSONObject media(){return displayMedia;}
-    boolean mediaVisible(){return !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
+    boolean mediaVisible(){return focusedMetric==null && !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
     public long wakeSentUntil;
     public String weatherCity="Санкт-Петербург";
     public String weatherHint="Нажми, чтобы обновить";
@@ -147,9 +160,9 @@ public class DashboardView extends View {
         setContentDescription("Панель мониторинга ПК. Настройки и тема расположены вверху справа.");
         setFocusable(true);
     }
-    public void clear() { history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = "Подключение…"; invalidate(); }
+    public void clear() {closeFocus();receivedSample=false; history.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data; if(data==null)audioOverride=null; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
+        sample = data; if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         JSONObject incoming=data==null?null:data.optJSONObject("media");
         if(incoming!=null) {displayMedia=incoming;mediaReceived=now;lastMediaSeen=now;mediaTransition=false;}
@@ -173,10 +186,10 @@ public class DashboardView extends View {
     private static String number(float n) { return Float.isNaN(n) ? "—" : String.format(Locale.US, "%.0f", n); }
     private static String decimal(float n) { return Float.isNaN(n) ? "—" : String.format(Locale.US, "%.1f", n); }
     private void text(Canvas c, String text, float x, float y, float size, int color, Typeface font) {
-        p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); p.setTypeface(nerv ? (font==medium?terminal:Typeface.MONOSPACE) : font); p.setTextSize(size); c.drawText(text, x, y, p);
+        p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); p.setTypeface(nerv ? (font==medium?terminal:Typeface.MONOSPACE) : font); p.setTextSize(size); c.save();c.translate(x,y);c.scale(1/textRatio(),1);c.drawText(text,0,0,p);c.restore();
     }
     private void fit(Canvas c,String value,float x,float y,float size,float width,int color) {
-        if(width<=0)return;String label=value==null?"—":value;
+        width*=textRatio();if(width<=0)return;String label=value==null?"—":value;
         p.setTypeface(nerv?terminal:medium);p.setTextSize(size);
         while(p.measureText(label)>width && size>10)p.setTextSize(--size);
         if(p.measureText(label)>width){int end=p.breakText(label,true,Math.max(0,width-p.measureText("…")),null);label=label.substring(0,end)+"…";}
@@ -184,19 +197,22 @@ public class DashboardView extends View {
     }
     private void centerFit(Canvas c,String value,float center,float baseline,float size,float width,int color){p.setTextAlign(Paint.Align.CENTER);fit(c,value,center,baseline,size,width,color);p.setTextAlign(Paint.Align.LEFT);}
     private void box(Canvas c, float x, float y, float w, float h, int color) {
-        p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); if(!nerv)c.drawRoundRect(x,y,x+w,y+h,22,22,p);
+        p.setShader(null); p.setStyle(Paint.Style.FILL); p.setColor(color); if(!nerv || detailLevel==0)c.drawRoundRect(x,y,x+w,y+h,22,22,p);
         else {
             float cut=Math.min(18,Math.min(w,h)/3);
             Path path=new Path();path.moveTo(x+cut,y);path.lineTo(x+w,y);path.lineTo(x+w,y+h-cut);path.lineTo(x+w-cut,y+h);path.lineTo(x,y+h);path.lineTo(x,y+cut);path.close();c.drawPath(path,p);
             if(h>50){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor((accent&0xffffff)|0x66000000);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);}
         }
     }
+    private void circle(Canvas c,float x,float y,float radius,Paint paint){
+        c.save();c.translate(x,y);c.scale(1/textRatio(),1);c.drawCircle(0,0,radius,paint);c.restore();
+    }
     private void line(Canvas c, float x, float y, float endX, float endY, int color, float stroke) {
         p.setShader(null); p.setColor(color); p.setStrokeWidth(stroke); p.setStyle(Paint.Style.STROKE); c.drawLine(x,y,endX,endY,p); p.setStyle(Paint.Style.FILL);
     }
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
-        DashboardTheme palette=DashboardTheme.ALL[Math.max(0,Math.min(DashboardTheme.ALL.length-1,themeId))];
+        palette=DashboardTheme.ALL[Math.max(0,Math.min(DashboardTheme.ALL.length-1,themeId))];
         nerv=palette.isNerv();
         accent=palette.primary;secondary=palette.secondary;panel=palette.panel;
         c.drawColor(palette.background);
@@ -204,21 +220,26 @@ public class DashboardView extends View {
         c.save();c.scale(getWidth()/VIEWPORT_WIDTH,getHeight()/VIEWPORT_HEIGHT);c.translate(-VIEWPORT_LEFT,0);
         p.setShader(new RadialGradient(300, 100, 750, palette.glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,1200,760,p); p.setShader(null);
-        if(nerv)drawTerminalFrame(c,palette);
-        if(standby()){drawStandby(c);finishAnimation(c,"standby");drawInteraction(c);c.restore();postInvalidateDelayed(1000);return;}
+        if(editing || standby())focusedMetric=null;
+        focusTargets.clear();
+        if(nerv && detailLevel>0)drawTerminalFrame(c,palette);
+        if(standby()){drawStandby(c);finishAnimation(c,"standby");drawStatus(c);drawInteraction(c);c.restore();postInvalidateDelayed(1000);return;}
         text(c, nerv?"NERV":"LIBRE", 36, 53, 29, nerv?accent:white, medium); text(c, nerv?"MAGI / "+(palette.name.equals("NERV")?"SYS":palette.name.substring(4)):"H W   T A B", 144, 52, nerv?13:16, accent, medium);
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         text(c, time, 700, 53, 27, white, digits);
         boolean playing=playing();
+        if(nerv && detailLevel>0 && palette.name.startsWith("EVA-"))
+            fit(c,palette.unitDescription(),36,80,9,250,secondary);
         button(c,menuHit,"МЕНЮ");
         button(c, modeHit, mode==0 ? (playing ? "AUTO / ИГРА" : "AUTO / ОБЗОР") : mode==1 ? "РЕЖИМ / ОБЗОР" : "РЕЖИМ / ИГРА");
         button(c, themeHit, "THEME / "+palette.name); button(c, settingsHit, "ПОДКЛЮЧЕНИЕ");
         boolean healthy = sample != null && sample.isNull("sensorError");
-        int status = sample == null ? secondary : healthy ? accent : 0xFFFF7777;
-        p.setColor(status); c.drawCircle(43, 93, 4, p);
-        String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "OFFLINE  /  " + error;
+        int status = sample == null ? ALERT : healthy ? accent : ALERT;
+        p.setColor(status); circle(c,43, 93, 4, p);
+        String caption = demo ? "DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ" : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : "  /  ОШИБКА ДАТЧИКОВ") : "SIGNAL LOST  /  " + error;
         fit(c, caption, 56, 99, 13, 1090, status);
         drawnCards.clear();audioControls.clear();
+        if(focusedMetric!=null){drawFocus(c);drawStatus(c);c.restore();postInvalidateDelayed(1000);return;}
         if(playing){drawBlock(c,"main",true);drawBlock(c,"audio",true);}
         else {
             drawBlock(c,"cpu",false);
@@ -231,10 +252,12 @@ public class DashboardView extends View {
         if(editing)drawEditor(c,playing);
         finishAnimation(c,(playing?"game":"overview")+themeId);
         JSONObject game = object("game");
-        if(sample!=null && !sample.isNull("sensorError"))fit(c,"Ошибка чтения датчиков — проверь агент",36,727,12,1128,0xFFFF7777);
+        if(sample!=null && !sample.isNull("sensorError"))fit(c,"Ошибка чтения датчиков — проверь агент",36,727,12,1128,ALERT);
         else if(game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
+        if(!editing)drawStatus(c);
         drawInteraction(c);
         c.restore();
+        postInvalidateDelayed(1000);
     }
     private static int tint(int color,int alpha){return (color&0x00ffffff)|(alpha<<24);}
     private int surface(int fallback,int alpha){return nerv?tint(accent,alpha):fallback;}
@@ -243,29 +266,34 @@ public class DashboardView extends View {
         for(int x=36;x<=1164;x+=24)line(c,x,112,x,116,surface(0,70),1);
         line(c,36,112,1164,112,tint(accent,60),1);
         if(!standby())line(c,36,68,285,68,tint(accent,110),1);
-        if(!standby()){
-            text(c,"TACTICAL TELEMETRY / "+palette.name,36,748,9,tint(accent,190),medium);
-            text(c,"MAGI SYSTEM / LOCAL MONITOR",900,748,9,muted,regular);
-        }
+
     }
     private void panelFrame(Canvas c,float w,float h) {
-        if(!nerv)return;
+        if(!nerv || detailLevel==0)return;
         line(c,20,1,Math.min(w-20,92),1,accent,3);
         line(c,w-1,20,w-1,Math.min(h-20,54),secondary,2);
         line(c,w-64,h-2,w-20,h-2,tint(secondary,150),2);
         // Fine edge ticks stay outside the card's content padding.
-        for(int y=40;y<h-20;y+=24)line(c,1,y,4,y,tint(accent,65),1);
+        if(detailLevel==2)for(int y=40;y<h-20;y+=24)line(c,1,y,4,y,tint(accent,65),1);
+        if(palette.name.startsWith("EVA-")) {
+            String unit=palette.name.substring(4);
+            p.setTextAlign(Paint.Align.RIGHT);
+            text(c,unit,w-20,Math.min(h-24,140),Math.min(detailLevel==2?150:100,h*.55f),tint(secondary,detailLevel==2?22:12),medium);
+            p.setTextAlign(Paint.Align.LEFT);
+            int marks=unit.equals("00")?1:unit.equals("01")?2:3;
+            for(int i=0;i<marks;i++)line(c,w-22-i*9,6,w-18-i*9,12,secondary,2);
+        }
     }
     private void button(Canvas c, RectF r, String label) {
         box(c, r.left, r.top+7, r.width(), 40, fingerDown&&r.equals(pressedRect)?surface(0xFF324557,75):surface(0xFF152131,24));
         fit(c, label, r.left+14, r.top+33, 12, r.width()-28, nerv?accent:muted);
-        if(nerv)line(c,r.left+14,r.top+47,r.right-14,r.top+47,tint(accent,90),1);
+        if(nerv && detailLevel>0)line(c,r.left+14,r.top+47,r.right-14,r.top+47,tint(accent,90),1);
     }
     private static float bounded(float value,float min,float max){return Math.max(min,Math.min(max,value));}
     private float padding(float w,float h){return bounded(Math.min(w,h)*.075f,12,24);}
     private void cardTitle(Canvas c,String label,float w,float h){
         float pad=padding(w,h);
-        if(nerv){p.setColor(tint(accent,18));c.drawRect(pad-5,pad-3,w-pad+5,pad+17,p);line(c,pad-5,pad-3,pad-5,pad+17,accent,2);}
+        if(nerv && detailLevel>0){p.setColor(tint(accent,18));c.drawRect(pad-5,pad-3,w-pad+5,pad+17,p);line(c,pad-5,pad-3,pad-5,pad+17,accent,2);}
         fit(c,label,pad,pad+12,h<160?10:12,w-pad*2,accent);
     }
     private void metric(Canvas c,String title,String value,String unit,RectF area,int color) {
@@ -342,7 +370,7 @@ public class DashboardView extends View {
             if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);lastX=x;lastY=y;
         }
         p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
-        if(started){p.setColor(accent);c.drawCircle(lastX,lastY,3,p);}
+        if(started){p.setColor(accent);circle(c,lastX,lastY,3,p);}
         if(fpsHistory.size()<2)fit(c,"ОЖИДАНИЕ СИГНАЛА",left+8,top+20,10,right-left-16,muted);
         if(budget) {
             float frame=value(game,"frameTime"),row=(area.height()-8)/3;
@@ -368,7 +396,7 @@ public class DashboardView extends View {
             for(int i=0;i<count;i++) {
                 double value=frames.optDouble(start+i);if(!Double.isFinite(value)||value<=0){started=false;continue;}
                 float x=plot.left+plot.width()*(300-count+i)/299,y=plot.bottom-plot.height()*(float)value/limit;
-                if(nerv)line(c,x,plot.bottom,x,y,value>16.667?tint(secondary,119):tint(accent,85),1);
+                if(nerv)line(c,x,plot.bottom,x,y,value>16.667?tint(ALERT,119):tint(accent,85),1);
                 if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
             }
             p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
@@ -382,7 +410,7 @@ public class DashboardView extends View {
         float bodyH=Math.max(36,footer-body-10);boolean hasTemp=layout.metric("temperature"),hasLoad=layout.metric("load");boolean columns=hasTemp && hasLoad && (w>=300 || compact);
         float firstW=columns?(w-pad*3)*.61f:w-pad*2,loadX=columns?pad+firstW+pad:pad;
         float tempSize=bounded(Math.min(firstW*.65f,bodyH*.65f),25,84);
-        int thermal=Float.isFinite(value(data,"temperature"))&&value(data,"temperature")>=(series==0?85:83)?0xFFFF7777:color;
+        int thermal=Float.isFinite(value(data,"temperature"))&&value(data,"temperature")>=(series==0?85:83)?ALERT:color;
         if(layout.metric("temperature")) {
             valueWithUnit(c,number(value(data,"temperature")),pad,body+tempSize,tempSize,"°C",bounded(tempSize*.30f,12,24),tempSize*.43f,thermal);
             if(bodyH>70)text(c,"ТЕМПЕРАТУРА",pad,body+tempSize+20,10,color,medium);
@@ -412,9 +440,12 @@ public class DashboardView extends View {
     private void gameHardware(Canvas c,float w,float h) {
         float pad=padding(w,h);cardTitle(c,"02 / HARDWARE",w,h);
         boolean columns=w>=420;float top=pad+(h<150?22:31),gap=h<150?6:16,sectionH=columns?h-top-pad:(h-top-pad-gap)/2,sectionW=columns?(w-pad*2-gap)/2:w-pad*2;
-        hardwareSection(c,new RectF(pad,top,pad+sectionW,top+sectionH),"GPU",object("gpu"),secondary,1);
+        RectF first=new RectF(pad,top,pad+sectionW,top+sectionH);
+        registerFocus("gpu",first);
+        hardwareSection(c,first,"GPU",object("gpu"),secondary,1);
         RectF second=columns?new RectF(pad+sectionW+gap,top,w-pad,h-pad):new RectF(pad,top+sectionH+gap,w-pad,h-pad);
         if(!columns)line(c,pad,second.top-gap/2,w-pad,second.top-gap/2,surface(0xFF56313B,55),1);
+        registerFocus("cpu",second);
         hardwareSection(c,second,"CPU",object("cpu"),accent,0);
     }
     private void hardwareSection(Canvas c,RectF r,String title,JSONObject data,int color,int series) {
@@ -428,7 +459,7 @@ public class DashboardView extends View {
             if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
         }
         float baseline=r.top+tempSize+27;
-        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,Float.isFinite(temperature)&&temperature>=(series==0?85:83)?0xFFFF7777:color);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
+        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,Float.isFinite(temperature)&&temperature>=(series==0?85:83)?ALERT:color);text(c,"ТЕМПЕРАТУРА",r.left,baseline+18,10,muted,medium);}
         if(layout.metric("load")) {
             float barY=layout.metric("temperature")?r.top+r.height()*.73f:r.top+65;
             text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
@@ -477,7 +508,7 @@ public class DashboardView extends View {
     }
     private void valueWithUnit(Canvas c,String value,float x,float baseline,float size,String unit,float unitSize,float rise,int color) {
         text(c,value,x,baseline,size,white,digits);
-        float unitX=x+p.measureText(value)+10;
+        float unitX=x+(p.measureText(value)+10)/textRatio();
         text(c,unit,unitX,baseline-rise,unitSize,color,medium);
     }
     private void loadLabel(Canvas c, float centerX, float centerY, float load) {
@@ -534,7 +565,7 @@ public class DashboardView extends View {
     private void nervSegments(Canvas c,float left,float top,float width,float height,float load,int color,int count) {
         float step=width/count;
         for(int i=0;i<count;i++) {
-            p.setColor(Float.isFinite(load)&&i<Math.ceil(Math.max(0,Math.min(100,load))/100*count)?(load>=90?secondary:color):surface(0xFF38222A,24));
+            p.setColor(Float.isFinite(load)&&i<Math.ceil(Math.max(0,Math.min(100,load))/100*count)?(load>=90?ALERT:color):surface(0xFF38222A,24));
             float x=left+i*step,slant=Math.min(3,step/3);Path segment=new Path();
             segment.moveTo(x+slant,top);segment.lineTo(x+step-1,top);segment.lineTo(x+step-1-slant,top+height);segment.lineTo(x,top+height);segment.close();c.drawPath(segment,p);
         }
@@ -553,8 +584,8 @@ public class DashboardView extends View {
         box(c,36,589,1128,115,panel);line(c,36,589,1164,589,accent,2);
         RectF thumb=new RectF(52,605,187,689);
         if(mediaThumbnail!=null) {
-            float factor=Math.min(thumb.width()/mediaThumbnail.getWidth(),thumb.height()/mediaThumbnail.getHeight());
-            float w=mediaThumbnail.getWidth()*factor,h=mediaThumbnail.getHeight()*factor;
+            float factor=Math.min(thumb.width()*aspectRatio()/mediaThumbnail.getWidth(),thumb.height()/mediaThumbnail.getHeight());
+            float w=mediaThumbnail.getWidth()*factor/aspectRatio(),h=mediaThumbnail.getHeight()*factor;
             p.setColor(white);c.drawBitmap(mediaThumbnail,null,new RectF(thumb.centerX()-w/2,thumb.centerY()-h/2,thumb.centerX()+w/2,thumb.centerY()+h/2),p);
         }else {box(c,52,605,135,84,surface(0xFF152131,18));text(c,"CHROME",67,653,17,accent,medium);}
         c.save();c.clipRect(204,598,845,651);
@@ -565,7 +596,7 @@ public class DashboardView extends View {
         else if(media.optBoolean("playing"))position+=(android.os.SystemClock.elapsedRealtime()-mediaReceived)/1000.0;
         if(duration>0)position=Math.min(position,duration);
         line(c,204,673,840,673,surface(0xFF263446,35),5);
-        if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);c.drawCircle(x,673,4,p);}
+        if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);circle(c,x,673,4,p);}
         text(c,mediaTime(position)+" / "+(duration>0?mediaTime(duration):"LIVE"),204,694,9,muted,regular);
         mediaButton(c,mediaPrevious,"|◀",media.optBoolean("canPrevious")&&!mediaTransition&&!mediaCommandPending);
         mediaButton(c,mediaToggle,media.optBoolean("playing")?"Ⅱ":"▶",media.optBoolean("canToggle")&&!mediaTransition&&!mediaCommandPending);
@@ -583,7 +614,9 @@ public class DashboardView extends View {
         if(mediaVisible()){target.top=125+(target.top-125)*.79f;target.bottom=125+(target.bottom-125)*.79f;}
         drawnCards.put(key,target);
         c.save();c.clipRect(target);c.translate(target.left,target.top);
-        float w=target.width(),h=target.height();box(c,0,0,w,h,panel);panelFrame(c,w,h);
+        float ratio=aspectRatio();c.scale(1/ratio,1);localCoordinates=true;
+        float w=target.width()*ratio,h=target.height();box(c,0,0,w,h,panel);panelFrame(c,w,h);
+        if(!editing && (key.equals("cpu")||key.equals("gpu")||key.equals("main")||key.equals("memory")||key.equals("history")))focusTargets.put(key,new RectF(target));
         switch(key) {
             case "main":gamePanel(c,w,h);break;
             case "audio":audioCard(c,w,h);break;
@@ -593,7 +626,7 @@ public class DashboardView extends View {
             case "history":if(game)frameGraph(c,w,h);else graph(c,w,h);break;
             case "side":if(game)gameHardware(c,w,h);else cooling(c,w,h);break;
         }
-        c.restore();
+        localCoordinates=false;c.restore();
     }
     private void drawEditor(Canvas c,boolean game) {
         button(c,modeHit,"РЕДАКТОР / "+(game?"ИГРА":"ОБЗОР"));
@@ -601,7 +634,7 @@ public class DashboardView extends View {
         button(c,themeHit,"СОХРАНИТЬ");button(c,settingsHit,"ОТМЕНА");
         for(Map.Entry<String,RectF> entry:drawnCards.entrySet()) {
             RectF r=entry.getValue();p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(entry.getKey().equals(selection)?3:1);
-            p.setColor(layout.valid(game)?accent:0xFFFF7777);c.drawRect(r,p);p.setStyle(Paint.Style.FILL);
+            p.setColor(layout.valid(game)?accent:ALERT);c.drawRect(r,p);p.setStyle(Paint.Style.FILL);
             c.drawRect(r.right-22,r.bottom-22,r.right,r.bottom,p);
         }
         text(c,"Перетаскивай блоки · тяни нижний правый угол · красная рамка — пересечение",36,737,13,muted,medium);
@@ -609,12 +642,12 @@ public class DashboardView extends View {
     private void finishAnimation(Canvas c,String key) {
         long now=android.os.SystemClock.elapsedRealtime();
         if(!key.equals(transitionKey)){transitionKey=key;transitionStart=now;}
-        if(!nerv)return;
+        if(!nerv || detailLevel==0)return;
         p.setStyle(Paint.Style.FILL);
         for(int i=0;i<80;i++) {
             float x=36+i*18; if(x>1164)break;Path stripe=new Path();stripe.moveTo(x,716);stripe.lineTo(x+7,716);stripe.lineTo(x+14,721);stripe.lineTo(x+7,721);stripe.close();p.setColor(secondary);c.drawPath(stripe,p);
         }
-        if(animations && now-transitionStart<450 && !editing) {
+        if(detailLevel==2 && animations && now-transitionStart<450 && !editing) {
             float t=(now-transitionStart)/450f;p.setColor(((int)((1-t)*80)<<24)|(accent&0xffffff));c.drawRect(0,100,1200,710,p);
             line(c,36,125+t*565,1164,125+t*565,accent,2);postInvalidateOnAnimation();
         }
@@ -644,11 +677,12 @@ public class DashboardView extends View {
         box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?0xFF263C43:powerColor);
         int ink=waking?white:0xFF09121C;
         p.setColor(ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
-        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);
+        c.save();c.translate(90,627);c.scale(1/aspectRatio(),1);c.translate(-90,-627);
+        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);c.restore();
         p.setStyle(Paint.Style.FILL);p.setStrokeCap(Paint.Cap.BUTT);
         text(c,waking?"КОМАНДА ОТПРАВЛЕНА":"ВКЛЮЧИТЬ ПК",145,618,28,ink,medium);
         text(c,waking?"ЖДУ ПОДКЛЮЧЕНИЯ…":"ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN",145,654,13,ink,regular);
-        fit(c,sample==null?"ПК недоступен · "+error:"Соединение с ПК активно",60,738,12,1080,muted);
+
     }
     private void drawForecast(Canvas c) {
         java.time.Instant instant=java.time.Instant.now();
@@ -671,6 +705,72 @@ public class DashboardView extends View {
             float precipitation=value(slot,"precipitation");
             text(c,(Float.isNaN(precipitation)?"—":decimal(precipitation))+" мм/"+(slot.optInt("precipitationHours",1)==3?"3ч":"ч"),x+9,507,11,muted,regular);
         }
+    }
+    private RectF designRect(RectF r){return new RectF(r.left/aspectRatio(),r.top,r.right/aspectRatio(),r.bottom);}
+    private void registerFocus(String key,RectF local){
+        if(editing)return;RectF origin=drawnCards.get("side");if(origin==null)return;
+        RectF r=designRect(local);r.offset(origin.left,origin.top);focusTargets.put(key,r);
+    }
+    private String focusAt(float x,float y){
+        if(editing || standby())return null;
+        if(focusedMetric!=null)return focusArea.contains(x,y)?focusedMetric:null;
+        for(Map.Entry<String,RectF> entry:focusTargets.entrySet())if(entry.getValue().contains(x,y))return entry.getKey();
+        return null;
+    }
+    private boolean handleFocusTouch(MotionEvent event,float x,float y){
+        if(editing || standby()){focusGesture=null;return false;}
+        int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            focusGesture=focusAt(x,y);focusDownX=event.getX();focusDownY=event.getY();
+            if(focusGesture!=null){performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);return true;}
+        }
+        if(focusGesture==null)return false;
+        if(action==MotionEvent.ACTION_CANCEL){focusGesture=null;return true;}
+        if(action==MotionEvent.ACTION_POINTER_DOWN){focusGesture="cancelled";return true;}
+        if(action==MotionEvent.ACTION_MOVE && Math.hypot(event.getX()-focusDownX,event.getY()-focusDownY)>ViewConfiguration.get(getContext()).getScaledTouchSlop()){
+            focusGesture="cancelled";return true;
+        }
+        if(action==MotionEvent.ACTION_UP){
+            String target=focusAt(x,y);
+            if(focusGesture.equals(target)){focusedMetric=focusedMetric==null?target:null;pressedRect=null;pressedAudio=null;performClick();invalidate();}
+            focusGesture=null;return true;
+        }
+        return true;
+    }
+    private void drawFocus(Canvas c){
+        float ratio=aspectRatio(),w=focusArea.width()*ratio,h=focusArea.height();
+        c.save();c.translate(focusArea.left,focusArea.top);c.scale(1/ratio,1);localCoordinates=true;
+        box(c,0,0,w,h,panel);panelFrame(c,w,h);
+        String key=focusedMetric;
+        cardTitle(c,"FOCUS / "+(key.equals("main")?"FPS":key.toUpperCase(Locale.ROOT))+" · ТАП — НАЗАД",w,h);
+        if(key.equals("history")){c.save();c.translate(0,30);if(playing())frameGraph(c,w,h-30);else graph(c,w,h-30);c.restore();}
+        else {
+            boolean cpu=key.equals("cpu"),gpu=key.equals("gpu"),fps=key.equals("main");
+            JSONObject data=object(fps?"game":key.equals("memory")?"memory":key);
+            String field=fps?"fps":cpu||gpu?"temperature":"load";
+            float value=value(data,field);int color=cpu?accent:gpu?secondary:accent;
+            boolean hot=(cpu||gpu)&&Float.isFinite(value)&&value>=(cpu?85:83);
+            if(hot)color=ALERT;
+            fit(c,data==null?"Ожидание данных":data.optString("name",key.equals("memory")?"RAM":""),24,76,20,w-48,muted);
+            centerFit(c,number(value)+(fps?" FPS":cpu||gpu?" °C":" %"),w/2,300,Math.min(180,w*.20f),w-48,color);
+            if(hot)centerFit(c,"THERMAL ALERT",w/2,342,18,w-48,ALERT);
+            if(fps)fpsSignal(c,new RectF(24,370,w-24,h-24),data);
+            else {text(c,cpu||gpu?"TEMPERATURE / 60 С":"MEMORY LOAD / 60 С",24,378,11,color,medium);loadSpark(c,24,398,w-48,h-430,cpu?0:gpu?1:4,color);}
+        }
+        localCoordinates=false;c.restore();
+    }
+    String statusText(){
+        long age=Math.max(0,(android.os.SystemClock.elapsedRealtime()-lastGood)/1000);
+        String link=sample==null?"SIGNAL LOST":demo?"DEMO":sample.isNull("sensorError")?"LINK ONLINE":"SENSOR ERROR";
+        String ageText=!receivedSample?"НЕТ ПАКЕТА":(demo?"ДЕМО-ПАКЕТ ":"ПАКЕТ ")+age+" С НАЗАД";
+        String state=standby()?"STANDBY":focusedMetric!=null?"FOCUS / "+(focusedMetric.equals("main")?"FPS":focusedMetric.toUpperCase(Locale.ROOT)):playing()?"GAME":"OVERVIEW";
+        JSONObject audio=audio(),mic=audio==null?null:audio.optJSONObject("microphone");
+        return link+"  /  "+ageText+"  /  "+state+(sample!=null&&mic!=null&&mic.optBoolean("available")&&mic.optBoolean("muted")?"  /  MIC CUT":"");
+    }
+    private void drawStatus(Canvas c){
+        int color=sample==null || !sample.isNull("sensorError")?ALERT:muted;
+        line(c,36,731,1164,731,tint(color,70),1);
+        fit(c,statusText(),36,750,11,1128,color);
     }
     private RectF controlAt(float x,float y) {
         if(editing){for(RectF r:new RectF[]{themeHit,settingsHit,new RectF(655,20,820,86)})if(r.contains(x,y))return r;return null;}
@@ -703,6 +803,7 @@ public class DashboardView extends View {
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         if(getWidth()==0 || getHeight()==0)return false;
         float x=event.getX()*VIEWPORT_WIDTH/getWidth()+VIEWPORT_LEFT,y=event.getY()*VIEWPORT_HEIGHT/getHeight();
+        if(handleFocusTouch(event,x,y))return true;
         if(!editing && event.getAction()==MotionEvent.ACTION_DOWN){
             pressedAudio=audioAt(x,y);
             if(pressedAudio!=null && pressedAudio.action.equals("volume")){

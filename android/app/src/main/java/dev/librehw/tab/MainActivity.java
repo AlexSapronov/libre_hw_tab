@@ -60,6 +60,10 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.layout=DashboardLayout.parse(savedLayout);
         dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
         dashboard.animations=preferences.getBoolean("animations",true);
+        dashboard.detailLevel=Math.max(0,Math.min(2,preferences.getInt("detail_level",1)));
+        getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
+            @Override public void handleOnBackPressed(){if(!dashboard.closeFocus()){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();setEnabled(true);}}
+        });
         try{dashboard.weather=new JSONObject(preferences.getString("weather_cache",""));}catch(Exception ignored){}
         dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
         dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
@@ -256,13 +260,20 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             });
         });
     }
+    private void designDetail(){
+        new AlertDialog.Builder(this).setTitle("Насыщенность оформления")
+            .setSingleChoiceItems(DashboardView.DETAIL_LABELS,dashboard.detailLevel,(dialog,which)->{
+                dashboard.detailLevel=which;preferences.edit().putInt("detail_level",which).apply();dashboard.invalidate();dialog.dismiss();
+            }).setNegativeButton("Закрыть",null).show();
+    }
     private void menu() {
         new AlertDialog.Builder(this).setTitle("Libre HW Tab")
-            .setItems(new String[]{"Экран ожидания","Редактор блоков","Погода: выбрать город","Будильник","Wake-on-LAN","Автоожидание: "+(dashboard.autoStandby?"вкл":"выкл"),"Анимации: "+(dashboard.animations?"вкл":"выкл"),"Подключение"},(d,index)->{
+            .setItems(new String[]{"Экран ожидания","Редактор блоков","Погода: выбрать город","Будильник","Wake-on-LAN","Автоожидание: "+(dashboard.autoStandby?"вкл":"выкл"),"Анимации: "+(dashboard.animations?"вкл":"выкл"),"Подключение","Оформление: "+DashboardView.DETAIL_LABELS[dashboard.detailLevel]},(d,index)->{
                 if(index==0){dashboard.forceStandby=true;dashboard.invalidate();}
                 else if(index==1)new AlertDialog.Builder(this).setTitle("Какой макет изменить?").setItems(new String[]{"Обзор","Игра"},(v,choice)->beginEditor(choice==1)).show();
                 else if(index==2)weatherCity();else if(index==3)alarm();else if(index==4)wakeOptions();
                 else if(index==5){dashboard.autoStandby=!dashboard.autoStandby;preferences.edit().putBoolean("auto_standby",dashboard.autoStandby).apply();dashboard.invalidate();}
+                else if(index==8){designDetail();}
                 else if(index==6){dashboard.animations=!dashboard.animations;preferences.edit().putBoolean("animations",dashboard.animations).apply();}
                 else settings();
             }).setNegativeButton("Закрыть",null).show();

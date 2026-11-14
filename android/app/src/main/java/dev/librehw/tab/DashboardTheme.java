@@ -7,6 +7,12 @@ final class DashboardTheme {
         this.name=name;this.description=description;this.primary=Color.parseColor(primary);this.secondary=Color.parseColor(secondary);
         this.background=Color.parseColor(background);this.panel=Color.parseColor(panel);this.glow=Color.parseColor(glow);
     }
+    String unitDescription(){
+        if(name.equals("EVA-00"))return "PROTOTYPE / REI / UNIT 00";
+        if(name.equals("EVA-01"))return "TEST TYPE / SHINJI / UNIT 01";
+        if(name.equals("EVA-02"))return "PRODUCTION / ASUKA / UNIT 02";
+        return "MAGI / CENTRAL COMMAND";
+    }
     boolean isNerv() { return name.equals("NERV") || name.startsWith("EVA-"); }
     static final DashboardTheme[] ALL={
         new DashboardTheme("JADE","Jade — мята и янтарь","#5EF2CA","#FFBA75","#070C15","#101B29","#25205049"),
