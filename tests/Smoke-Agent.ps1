@@ -23,6 +23,13 @@ try {
     $sample = $response.Content | ConvertFrom-Json
     if ($sample.version -ne 1 -or !$sample.timestamp -or !$sample.host) { throw 'Invalid telemetry schema' }
     if ($null -eq $sample.game -or $null -eq $sample.game.active -or !$sample.game.status) { throw 'Missing game status schema' }
+    if ('media' -notin $sample.PSObject.Properties.Name) { throw 'Missing optional media schema' }
+    $mediaNoKey = Invoke-WebRequest ("http://127.0.0.1:$($config.Port)/api/v1/media/control") -Method Post -ContentType 'application/json' -Body '{"id":"stale","action":"next"}' -SkipHttpErrorCheck
+    if ($mediaNoKey.StatusCode -ne 401) { throw 'Media control must require pairing token' }
+    $mediaStale = Invoke-WebRequest ("http://127.0.0.1:$($config.Port)/api/v1/media/control") -Method Post -Headers @{ 'X-Libre-Token' = $config.Token } -ContentType 'application/json' -Body '{"id":"stale","action":"next"}' -SkipHttpErrorCheck
+    if ($mediaStale.StatusCode -ne 409) { throw 'Stale media commands must be rejected' }
+    $thumbNoKey = Invoke-WebRequest ("http://127.0.0.1:$($config.Port)/api/v1/media/stale/thumbnail") -SkipHttpErrorCheck
+    if ($thumbNoKey.StatusCode -ne 401) { throw 'Media thumbnails must require pairing token' }
     $capture = Start-Process (Join-Path $PWD 'package/agent/PresentMon.exe') -ArgumentList @('--no_csv','--no_console_stats','--v1_metrics','--no_track_gpu','--no_track_input','--session_name',"LibreHwTab-Smoke-$PID",'--timed','2','--terminate_after_timed') -PassThru -NoNewWindow
     try { $capture | Wait-Process -Timeout 15 } catch { Stop-Process -Id $capture.Id -Force; throw }
     $capture.Refresh()

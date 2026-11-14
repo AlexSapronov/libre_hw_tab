@@ -12,7 +12,7 @@ public final class DashboardView extends View {
     private final Runnable settings, theme;
     private static final class ThermalPoint {
         final long time; final float[] values;
-        ThermalPoint(long time,float cpu,float gpu){this.time=time;values=new float[]{cpu,gpu};}
+        ThermalPoint(long time,float cpu,float gpu,float cpuLoad,float gpuLoad){this.time=time;values=new float[]{cpu,gpu,cpuLoad,gpuLoad};}
     }
     private final ArrayDeque<ThermalPoint> history = new ArrayDeque<>();
     private JSONObject sample;
@@ -22,6 +22,13 @@ public final class DashboardView extends View {
     DashboardLayout layout=new DashboardLayout();
     public boolean editing,forceStandby,autoStandby=true,animations=true;
     public JSONObject weather;
+    public Bitmap mediaThumbnail;
+    public interface MediaAction { void run(String action,double fraction); }
+    public MediaAction onMedia=(action,fraction)->{};
+    private long mediaReceived;
+    private final RectF mediaPrevious=new RectF(877,605,957,685),mediaToggle=new RectF(973,605,1053,685),mediaNext=new RectF(1069,605,1149,685),mediaSeek=new RectF(204,657,840,691);
+    public JSONObject media(){return object("media");}
+    boolean mediaVisible(){return !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
     public long wakeSentUntil;
     public String weatherCity="Санкт-Петербург";
     public String weatherHint="Нажми, чтобы обновить";
@@ -57,9 +64,9 @@ public final class DashboardView extends View {
     }
     public void clear() { history.clear(); sample = null; error = "Подключение…"; invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data; if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
+        sample = data;mediaReceived=android.os.SystemClock.elapsedRealtime(); if(data!=null)lastGood=android.os.SystemClock.elapsedRealtime(); this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
-        history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature")));
+        history.add(new ThermalPoint(now,value(object("cpu"),"temperature"),value(object("gpu"),"temperature"),value(object("cpu"),"load"),value(object("gpu"),"load")));
         while (!history.isEmpty() && (now-history.peekFirst().time>180000 || history.size()>1000))history.removeFirst();
         invalidate();
     }
@@ -122,6 +129,7 @@ public final class DashboardView extends View {
         drawBlock(c,"side",playing,()->{if(playing)gameHardware(c);else cooling(c);});
         if(layout.metric("memory"))drawBlock(c,"memory",playing,()->memory(c,playing));
         if(layout.metric("history"))drawBlock(c,"history",playing,()->{if(playing)frameGraph(c);else graph(c);});
+        if(mediaVisible())drawMedia(c);
         if(editing)drawEditor(c,playing);
         finishAnimation(c,(playing?"game":"overview")+themeId);
         JSONObject game = object("game");
@@ -166,12 +174,17 @@ public final class DashboardView extends View {
         limit=(float)Math.ceil(limit/8.333f)*8.333f;
         float left=348,top=497,width=520,height=155;
         for(int i=0;i<3;i++) {float y=top+i*height/2;line(c,left,y,left+width,y,0xFF263446,1);text(c,number(limit*(1-i/2f)),884,y+4,10,muted,regular);}
+        if(nerv)for(float budget:new float[]{4.167f,8.333f,16.667f})if(budget<limit) {
+            float y=top+height*(1-budget/limit);line(c,left,y,left+width,y,0xFF824354,1);
+            text(c,Math.round(1000/budget)+" FPS",left+5,y-3,8,secondary,medium);
+        }
         if(frames==null || frames.length()<2) text(c,"Ожидание покадровых данных…",440,610,15,muted,regular);
         else {
             Path path=new Path(); boolean started=false; int count=Math.min(frames.length(),300),start=frames.length()-count;
             for(int i=0;i<count;i++) {
                 double v=frames.optDouble(start+i);if(!Double.isFinite(v)||v<=0){started=false;continue;}
                 float x=left+width*(300-count+i)/299,y=top+height*(1-(float)v/limit);
+                if(nerv)line(c,x,top+height,x,y,((float)v>16.667?0x77FF4657:0x55FF953D),1);
                 if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
             }
             p.setColor(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
@@ -194,11 +207,21 @@ public final class DashboardView extends View {
         text(c,"ТЕМПЕРАТУРА",x+27,y+220,11,muted,medium);
         }
         if(layout.metric("load")){
+        if(nerv) {
+            text(c,"UTILIZATION",x+263,y+112,10,muted,medium);
+            text(c,number(load)+"%",x+263,y+173,49,white,digits);
+            for(int i=0;i<16;i++) {
+                p.setColor(Float.isFinite(load)&&i<Math.ceil(Math.max(0,Math.min(100,load))/100*16)?(load>=90?secondary:color):0xFF38222A);
+                float sx=x+263+i*8.8f;Path segment=new Path();segment.moveTo(sx+3,y+192);segment.lineTo(sx+8,y+192);segment.lineTo(sx+5,y+213);segment.lineTo(sx,y+213);segment.close();c.drawPath(segment,p);
+            }
+            loadSpark(c,x+263,y+231,140,24,series+2,color);
+        }else {
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(10); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF253245);
         RectF arc = new RectF(x+274,y+120,x+410,y+256); c.drawArc(arc,140,260,false,p);
         if (Float.isFinite(load)) { p.setColor(color); c.drawArc(arc,140,260*Math.max(0,Math.min(1,load/100)),false,p); }
         p.setStrokeCap(Paint.Cap.BUTT); p.setStyle(Paint.Style.FILL);
         loadLabel(c, x+342, y+188, load);
+        }
         }
         line(c,x+24,y+266,x+412,y+266,0xFF263446,1);
         if(layout.metric("clock"))stat(c,x+24,y+296,"ЧАСТОТА",number(value(data,"clock"))+" MHz");
@@ -276,6 +299,7 @@ public final class DashboardView extends View {
         p.setTextAlign(Paint.Align.RIGHT); text(c,number(load)+" %",282,661,20,white,regular); p.setTextAlign(Paint.Align.LEFT);
     }
     private void graph(Canvas c) {
+        if(nerv){resourceGraph(c);return;}
         box(c,324,493,602,197,panel);
         text(c,"THERMAL HISTORY",348,526,13,white,medium);
         text(c,"CPU",688,526,11,accent,medium); text(c,"GPU",739,526,11,secondary,medium); text(c,"3 МИН",842,526,11,muted,medium);
@@ -294,9 +318,63 @@ public final class DashboardView extends View {
         }
         text(c,"−180 с",348,675,10,muted,regular); text(c,"−90 с",587,675,10,muted,regular); text(c,"СЕЙЧАС",821,675,10,muted,regular);
     }
+    private void loadSpark(Canvas c,float left,float top,float width,float height,int series,int color) {
+        Path path=new Path();boolean started=false;long now=android.os.SystemClock.elapsedRealtime();
+        for(ThermalPoint point:history) {
+            if(now-point.time>60000)continue;float value=point.values[series];if(!Float.isFinite(value)){started=false;continue;}
+            float x=left+width*(1-(now-point.time)/60000f),y=top+height*(1-Math.max(0,Math.min(100,value))/100);
+            if(!started){path.moveTo(x,y);started=true;}else path.lineTo(x,y);
+        }
+        line(c,left,top+height,left+width,top+height,0xFF56313B,1);p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+    }
+    private void resourceGraph(Canvas c) {
+        box(c,324,493,602,197,panel);text(c,"MAGI // RESOURCE LOAD",348,526,12,accent,medium);
+        text(c,"CPU",688,526,11,accent,medium);text(c,"GPU",739,526,11,secondary,medium);text(c,"3 МИН",842,526,11,muted,medium);
+        float left=348,top=547,width=520,height=105;
+        for(int i=0;i<=10;i++){float x=left+width*i/10;line(c,x,top,x,top+height,0xFF38222A,1);}
+        for(int i=0;i<=4;i++){float y=top+height*i/4;line(c,left,y,left+width,y,0xFF56313B,1);text(c,(100-i*25)+"%",879,y+4,9,muted,regular);}
+        for(int series=0;series<2;series++) {
+            Path path=new Path();boolean started=false;long now=android.os.SystemClock.elapsedRealtime();float previousY=0;
+            for(ThermalPoint point:history) {
+                float value=point.values[series+2];if(!Float.isFinite(value)){started=false;continue;}
+                float x=left+width*(1-(now-point.time)/180000f),y=top+height*(1-Math.max(0,Math.min(100,value))/100);
+                if(!started){path.moveTo(x,y);started=true;}else {path.lineTo(x,previousY);path.lineTo(x,y);}previousY=y;
+            }
+            p.setColor(series==0?accent:secondary);p.setStrokeWidth(2);p.setStyle(Paint.Style.STROKE);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+        }
+        text(c,"−180 с",348,675,10,muted,regular);text(c,"−90 с",587,675,10,muted,regular);text(c,"СЕЙЧАС",821,675,10,muted,regular);
+    }
+    private void drawMedia(Canvas c) {
+        JSONObject media=media();if(media==null)return;
+        box(c,36,589,1128,115,panel);line(c,36,589,1164,589,accent,2);
+        RectF thumb=new RectF(52,605,187,689);
+        if(mediaThumbnail!=null) {
+            float factor=Math.min(thumb.width()/mediaThumbnail.getWidth(),thumb.height()/mediaThumbnail.getHeight());
+            float w=mediaThumbnail.getWidth()*factor,h=mediaThumbnail.getHeight()*factor;
+            p.setColor(white);c.drawBitmap(mediaThumbnail,null,new RectF(thumb.centerX()-w/2,thumb.centerY()-h/2,thumb.centerX()+w/2,thumb.centerY()+h/2),p);
+        }else {box(c,52,605,135,84,0xFF152131);text(c,"CHROME",67,653,17,accent,medium);}
+        c.save();c.clipRect(204,598,845,651);
+        fit(c,media.optString("title","Видео"),204,621,18,630,white);
+        fit(c,"CHROME / "+media.optString("artist","")+(media.optBoolean("playing")?"":" · ПАУЗА"),204,645,12,630,muted);c.restore();
+        double duration=media.optDouble("duration",0),position=media.optDouble("position",0);
+        if(media.optBoolean("playing"))position+=(android.os.SystemClock.elapsedRealtime()-mediaReceived)/1000.0;
+        if(duration>0)position=Math.min(position,duration);
+        line(c,204,673,840,673,0xFF263446,5);
+        if(duration>0){float x=204+(float)Math.max(0,Math.min(1,position/duration))*636;line(c,204,673,x,673,accent,5);p.setColor(accent);c.drawCircle(x,673,4,p);}
+        text(c,mediaTime(position)+" / "+(duration>0?mediaTime(duration):"LIVE"),204,694,9,muted,regular);
+        mediaButton(c,mediaPrevious,"|◀",media.optBoolean("canPrevious"));
+        mediaButton(c,mediaToggle,media.optBoolean("playing")?"Ⅱ":"▶",media.optBoolean("canToggle"));
+        mediaButton(c,mediaNext,"▶|",media.optBoolean("canNext"));
+    }
+    private void mediaButton(Canvas c,RectF rect,String title,boolean enabled) {
+        box(c,rect.left,rect.top,rect.width(),rect.height(),enabled?0xFF263446:0xFF152131);
+        p.setTextAlign(Paint.Align.CENTER);text(c,title,rect.centerX(),rect.centerY()+10,29,enabled?accent:muted,medium);p.setTextAlign(Paint.Align.LEFT);
+    }
+    static String mediaTime(double seconds){int time=(int)Math.max(0,seconds);return time>=3600?String.format(Locale.US,"%d:%02d:%02d",time/3600,time/60%60,time%60):String.format(Locale.US,"%d:%02d",time/60,time%60);}
     private void drawBlock(Canvas c,String key,boolean game,Runnable renderer) {
         if(!layout.visible(key,game))return;
         RectF source=DashboardLayout.original(key,game),target=layout.rect(key,game);
+        if(mediaVisible()){target.top=125+(target.top-125)*.79f;target.bottom=125+(target.bottom-125)*.79f;}
         drawnCards.put(key,target);
         c.save();c.clipRect(target);box(c,target.left,target.top,target.width(),target.height(),panel);
         float factor=Math.min(target.width()/source.width(),target.height()/source.height());
@@ -399,6 +477,14 @@ public final class DashboardView extends View {
         }
         if(event.getAction()==MotionEvent.ACTION_UP) {
             performClick();
+            if(mediaVisible() && new RectF(36,589,1164,704).contains(x,y)) {
+                JSONObject media=media();
+                if(mediaPrevious.contains(x,y)&&media.optBoolean("canPrevious"))onMedia.run("previous",0);
+                else if(mediaToggle.contains(x,y)&&media.optBoolean("canToggle"))onMedia.run("toggle",0);
+                else if(mediaNext.contains(x,y)&&media.optBoolean("canNext"))onMedia.run("next",0);
+                else if(mediaSeek.contains(x,y)&&media.optBoolean("canSeek"))onMedia.run("seek",Math.max(0,Math.min(1,(x-204)/636)));
+                return true;
+            }
             if(standby()) {
                 if(clockBack.contains(x,y))suppressStandby();else if(settingsHit.contains(x,y))onMenu.run();
                 else if(clockAlarm.contains(x,y))onAlarm.run();else if(clockWeather.contains(x,y))onWeather.run();else if(clockWake.contains(x,y))onWake.run();

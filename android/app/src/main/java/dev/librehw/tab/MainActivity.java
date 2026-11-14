@@ -30,6 +30,10 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private HttpURLConnection connection;
     private ScheduledExecutorService extras;
     private long lastWake;
+    private final ExecutorService mediaWorker=Executors.newSingleThreadExecutor();
+    private volatile boolean mediaBusy,thumbnailBusy;
+    private String thumbnailId="";
+    private long thumbnailRetry;
     private volatile long nextWeatherAttempt;
     private volatile boolean forceWeather;
     private String weatherError="";
@@ -57,6 +61,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.weatherCity=preferences.getString("weather_city","Санкт-Петербург");
         dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
         dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
+        dashboard.onMedia=this::mediaCommand;
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);
@@ -123,7 +128,31 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 if(!targets.equals(preferences.getString("wake_targets","")))preferences.edit().putString("wake_targets",targets).apply();
             }
             dashboard.accept(result,error,demonstration);
+            updateThumbnail(result,current);
         }});
+    }
+    private void updateThumbnail(JSONObject sample,int current) {
+        JSONObject media=sample==null?null:sample.optJSONObject("media");String id=media==null?"":media.optString("id");
+        if(!id.equals(thumbnailId)){thumbnailId=id;dashboard.mediaThumbnail=null;thumbnailRetry=0;}
+        if(media==null||!media.optBoolean("hasThumbnail")||dashboard.mediaThumbnail!=null||thumbnailBusy||demo||android.os.SystemClock.elapsedRealtime()<thumbnailRetry)return;
+        thumbnailBusy=true;thumbnailRetry=android.os.SystemClock.elapsedRealtime()+10000;
+        String pc=address,key=token;
+        mediaWorker.submit(()->{
+            android.graphics.Bitmap bitmap=null;try{bitmap=MediaClient.thumbnail(pc,key,id);}catch(Exception ignored){}
+            final android.graphics.Bitmap image=bitmap;
+            ui.post(()->{thumbnailBusy=false;if(active&&current==generation&&id.equals(thumbnailId)){dashboard.mediaThumbnail=image;dashboard.invalidate();}});
+        });
+    }
+    private void mediaCommand(String action,double fraction) {
+        JSONObject media=dashboard.media();if(media==null||mediaBusy||demo)return;
+        String id=media.optString("id"),pc=address,key=token;
+        double position=Math.max(0,Math.min(1,fraction))*media.optDouble("duration",0);
+        mediaBusy=true;
+        mediaWorker.submit(()->{
+            String failure=null;try{MediaClient.control(pc,key,id,action,position);}catch(Exception ex){failure=ex.getMessage();}
+            final String message=failure;
+            ui.post(()->{mediaBusy=false;if(active&&message!=null)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();});
+        });
     }
     private EditText field(LinearLayout layout, String hint, String value, boolean secret) {
         EditText edit = new EditText(this); edit.setSingleLine(true); edit.setHint(hint); edit.setText(value);
@@ -316,7 +345,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {
-        cancelPairing(); pairingWorker.shutdownNow();
+        cancelPairing(); pairingWorker.shutdownNow();mediaWorker.shutdownNow();
         if (pairingDialog != null) pairingDialog.dismiss();
         super.onDestroy();
     }
