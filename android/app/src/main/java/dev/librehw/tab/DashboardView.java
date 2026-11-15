@@ -9,6 +9,16 @@ import java.util.*;
 /** A native Canvas dashboard: no WebView, remote fonts, or browser dependencies. */
 public class DashboardView extends View {
     private final Paint p = new Paint(3);
+    final AtmosphereState atmosphere=new AtmosphereState();
+    java.util.function.Consumer<String> onSound=cue->{};
+    boolean magiOpen;
+    private boolean logoArmed,suppressMagiRelease;
+    private float logoDownX,logoDownY;
+    private String screenKey="";
+    private long screenTransition=-10000;
+    private final Runnable logoHold=()->{
+        if(logoArmed&&!editing&&!boot.active){magiOpen=true;suppressMagiRelease=true;performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);onSound.accept("confirm");invalidate();}
+    };
     private final Runnable settings, theme;
     private static final class ThermalPoint {
         final long time; final float[] values;
@@ -40,7 +50,7 @@ public class DashboardView extends View {
     private int blockColor(){return (drawingBlock.equals("cpu")||drawingBlock.equals("gpu"))&&hot(drawingBlock)?ALERT:accent;}
     private String channel(){switch(drawingBlock){case "cpu":return "01";case "gpu":return "02";case "memory":return "03";case "history":return "04";case "audio":return "05";case "network":return "06";case "side":return "07";case "main":return "08";default:return "00";}}
     private final RectF focusArea=new RectF(36,125,1164,704);
-    public boolean closeFocus(){if(focusedMetric==null)return false;focusedMetric=null;focusGesture=null;invalidate();return true;}
+    public boolean closeFocus(){if(magiOpen){magiOpen=false;invalidate();return true;}if(focusedMetric==null)return false;focusedMetric=null;focusGesture=null;invalidate();return true;}
     float aspectRatio(){return (getWidth()/VIEWPORT_WIDTH)/(getHeight()/VIEWPORT_HEIGHT);}
     private float textRatio(){return localCoordinates?1:aspectRatio();}
     DashboardLayout layout=new DashboardLayout();
@@ -186,6 +196,7 @@ public class DashboardView extends View {
         if(data!=null&&(wakePending()||boot.active)){boot.connect(android.os.SystemClock.elapsedRealtime());wakeDeadline=0;wakeError="";forceStandby=false;}
         if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
+        String cue=atmosphere.accept(data,now);if(!cue.isEmpty())onSound.accept(cue);
         trends.accept(data,now);
         JSONObject incoming=data==null?null:data.optJSONObject("media");
         if(incoming!=null) {displayMedia=incoming;mediaReceived=now;lastMediaSeen=now;mediaTransition=false;}
@@ -245,6 +256,9 @@ public class DashboardView extends View {
             if(animations&&wakeError.isEmpty())postInvalidateOnAnimation();else postInvalidateDelayed(1000);
             return;
         }
+        String nextScreen=editing?"editor":magiOpen?"magi":standby()?"standby":focusedMetric!=null?"focus/"+focusedMetric:playing()?"game":"overview";
+        nextScreen+="/"+themeId;
+        if(!nextScreen.equals(screenKey)){if(!screenKey.isEmpty())screenTransition=bootNow;screenKey=nextScreen;}
         c.drawColor(palette.background);
         if(getWidth()==0 || getHeight()==0)return;
         c.save();c.scale(getWidth()/VIEWPORT_WIDTH,getHeight()/VIEWPORT_HEIGHT);c.translate(-VIEWPORT_LEFT,0);
@@ -253,6 +267,7 @@ public class DashboardView extends View {
         if(editing || standby())focusedMetric=null;
         focusTargets.clear();
         if(nerv && detailLevel>0)drawTerminalFrame(c,palette);
+        if(magiOpen){drawMagiTerminal(c);c.restore();postInvalidateDelayed(1000);return;}
         if(standby()){drawStandby(c);finishAnimation(c,"standby");drawStatus(c);drawInteraction(c);c.restore();postInvalidateDelayed(1000);return;}
         text(c, nerv?"NERV":"LIBRE", 36, 53, 29, nerv?accent:white, medium); text(c, nerv?"MAGI / "+(palette.name.equals("NERV")?"SYS":palette.name.substring(4)):"H W   T A B", 144, 52, nerv?13:16, accent, medium);
         boolean playing=playing();
@@ -272,6 +287,7 @@ public class DashboardView extends View {
         String caption = demo ? UiText.get("DEMO MODE  /  ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ") : sample != null ? sample.optString("host", "PC") + (healthy ? "  /  LIVE TELEMETRY" : UiText.get("  /  ОШИБКА ДАТЧИКОВ")) : "SIGNAL LOST  /  " + error;
         if(fullMagi())drawOperationalBand(c,caption);
         else fit(c, caption, 56, 99, 13, 1090, status);
+        drawAtmosphereNotice(c);
         drawnCards.clear();audioControls.clear();
         if(focusedMetric!=null){drawFocus(c);drawStatus(c);c.restore();postInvalidateDelayed(1000);return;}
         if(playing){drawBlock(c,"main",true);drawBlock(c,"audio",true);}
@@ -325,7 +341,14 @@ public class DashboardView extends View {
         c.save();c.clipRect(18,h-7,w-18,h-2);
         for(int x=18;x<w-18;x+=16)line(c,x,h-7,x+8,h-2,tint(color,130),3);
         c.restore();
-
+        if(palette.name.equals("EVA-00")){
+            for(int i=0;i<5;i++)line(c,w-38+i*5,h-20,w-38+i*5,h-20-(i%2==0?9:5),secondary,1);
+            line(c,w-42,h-20,w-12,h-20,tint(secondary,150),1);
+        }else if(palette.name.equals("EVA-01")){
+            Path hex=new Path();for(int i=0;i<6;i++){double a=Math.PI/3*i;float x=w-24+(float)Math.cos(a)*10,y=h-23+(float)Math.sin(a)*10;if(i==0)hex.moveTo(x,y);else hex.lineTo(x,y);}hex.close();p.setColor(secondary);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);c.drawPath(hex,p);p.setStyle(Paint.Style.FILL);
+        }else if(palette.name.equals("EVA-02")){
+            for(int i=0;i<3;i++)line(c,w-40+i*9,h-14,w-33+i*9,h-29,secondary,3);
+        }
     }
     private void button(Canvas c, RectF r, String label) {
         box(c, r.left, r.top+7, r.width(), 40, fingerDown&&r.equals(pressedRect)?surface(0xFF324557,75):surface(0xFF152131,24));
@@ -781,7 +804,14 @@ public class DashboardView extends View {
         c.save();c.clipRect(target);c.translate(target.left,target.top);
         float ratio=aspectRatio();c.scale(1/ratio,1);localCoordinates=true;
         drawingBlock=key;
-        float w=target.width()*ratio,h=target.height();box(c,0,0,w,h,panel);panelFrame(c,w,h);
+        float w=target.width()*ratio,h=target.height();
+        if(animations&&!editing&&!boot.active){
+            long elapsed=android.os.SystemClock.elapsedRealtime()-screenTransition;
+            int order=key.equals("main")||key.equals("cpu")?0:key.equals("audio")||key.equals("gpu")?1:key.equals("memory")||key.equals("side")?2:3;
+            float t=Math.max(0,Math.min(1,(elapsed-order*35f)/palette.transitionMillis()));
+            if(t<1){float eased=1-(float)Math.pow(1-t,3);c.clipRect(0,0,w,h*eased);postInvalidateOnAnimation();}
+        }
+        box(c,0,0,w,h,panel);panelFrame(c,w,h);
         if(!editing && (key.equals("cpu")||key.equals("gpu")||key.equals("main")||key.equals("memory")||key.equals("history")||key.equals("side")||key.equals("network")))focusTargets.put(key,new RectF(target));
         switch(key) {
             case "main":gamePanel(c,w,h);break;
@@ -816,15 +846,17 @@ public class DashboardView extends View {
         for(int i=0;i<80;i++) {
             float x=36+i*18; if(x>1164)break;Path stripe=new Path();stripe.moveTo(x,716);stripe.lineTo(x+7,716);stripe.lineTo(x+14,721);stripe.lineTo(x+7,721);stripe.close();p.setColor(secondary);c.drawPath(stripe,p);
         }
-        if(detailLevel==2 && animations && now-transitionStart<450 && !editing) {
-            float t=(now-transitionStart)/450f;p.setColor(((int)((1-t)*80)<<24)|(accent&0xffffff));c.drawRect(0,100,1200,710,p);
-            line(c,36,125+t*565,1164,125+t*565,accent,2);postInvalidateOnAnimation();
+        long elapsed=now-screenTransition;
+        if(animations&&elapsed>=0&&elapsed<palette.transitionMillis()+105&&!editing){
+            float t=Math.min(1,elapsed/(float)(palette.transitionMillis()+105));
+            line(c,36,117,36+1128*t,117,secondary,2);postInvalidateOnAnimation();
         }
     }
     private void drawStandby(Canvas c) {
         button(c,clockBack,UiText.get("ПАНЕЛЬ"));button(c,settingsHit,UiText.get("НАСТРОЙКИ"));
         java.time.ZonedDateTime clockNow=java.time.ZonedDateTime.now();
         text(c,nerv?"NERV // STANDBY":"LIBRE // STANDBY",60,180,16,accent,medium);
+        text(c,connected()?"EXTERNAL LINK / ONLINE":"EXTERNAL LINK / OFFLINE",60,214,12,connected()?accent:muted,medium);
         text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
         text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",UiText.locale())),60,455,25,muted,regular);
         String city=weather==null?weatherCity:weather.optString("city","Санкт-Петербург");
@@ -842,6 +874,7 @@ public class DashboardView extends View {
         drawForecast(c);
         line(c,730,543,1142,543,surface(0xFF263446,35),1);
         text(c,UiText.get("БУДИЛЬНИК  +"),730,575,13,accent,medium);fit(c,nextAlarm,730,615,23,410,white);
+        drawStandbyLink(c);
         if(connected())return;
         boolean waking=wakePending();long now=android.os.SystemClock.elapsedRealtime();
         int powerColor=wakeError.isEmpty()?accent:ALERT;
@@ -865,6 +898,42 @@ public class DashboardView extends View {
             fit(c,wakeError.isEmpty()?UiText.get("ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN"):wakeError,145,645,12,420,ink);
         }
 
+    }
+    private void drawStandbyLink(Canvas c){
+        int color=connected()?accent:muted;
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(color);c.drawRect(60,488,157,525,p);c.drawRect(451,488,548,525,p);p.setStyle(Paint.Style.FILL);
+        text(c,"TABLET",74,512,13,accent,medium);text(c,"PC",485,512,13,color,medium);
+        for(int i=0;i<14;i++)line(c,168+i*19,506,178+i*19,506,tint(color,100),2);
+        if(animations){float x=168+(android.os.SystemClock.elapsedRealtime()%5000)/5000f*260;line(c,x,506,x+14,506,accent,3);postInvalidateDelayed(50);}
+        text(c,connected()?"SIGNAL VERIFIED":"WAITING FOR UPLINK",190,540,9,color,medium);
+    }
+    private void drawAtmosphereNotice(Canvas c){
+        if(editing||boot.active||android.os.SystemClock.elapsedRealtime()>=atmosphere.noticeUntil)return;
+        int color=atmosphere.notice.contains("THERMAL LIMIT")||atmosphere.notice.startsWith("SIGNAL LOST")?ALERT:secondary;
+        p.setColor(panel);c.drawRect(36,83,1164,109,p);line(c,36,83,36,109,color,4);
+        fit(c,atmosphere.notice,49,101,14,1098,color);
+        postInvalidateDelayed(Math.max(1,atmosphere.noticeUntil-android.os.SystemClock.elapsedRealtime()));
+    }
+    private void drawMagiTerminal(Canvas c){
+        p.setColor(palette.background);c.drawRect(24,0,1176,760,p);
+        text(c,"MAGI / CENTRAL DIAGNOSTICS",44,65,27,accent,medium);
+        fit(c,UiText.get("ТАП ИЛИ BACK — НАЗАД"),44,99,12,1100,muted);
+        String[] names={"MELCHIOR : 1","BALTHASAR : 2","CASPER : 3"};
+        JSONObject audio=audio(),mic=audio==null?null:audio.optJSONObject("microphone");
+        boolean sensors=sample!=null&&sample.isNull("sensorError")&&(object("cpu")!=null||object("gpu")!=null),soundReady=audio!=null&&audio.optBoolean("ready"),micReady=soundReady&&mic!=null&&mic.optBoolean("available");
+        for(int i=0;i<3;i++){
+            float x=44+i*375;int color=i==0?connected()?accent:ALERT:i==1?sensors?accent:ALERT:soundReady?accent:muted;
+            box(c,x,165,350,410,panel);line(c,x+14,166,x+336,166,color,3);
+            fit(c,names[i],x+18,205,23,314,color);
+            fit(c,i==0?"TELEMETRY LINK":i==1?"HARDWARE SENSORS":"AUDIO CONTROL",x+18,247,14,314,muted);
+            fit(c,i==0?connected()?"ONLINE":"SIGNAL LOST":i==1?sample==null||(object("cpu")==null&&object("gpu")==null)?"NO DATA":sensors?"ONLINE":"SENSOR ERROR":soundReady?"READY":"UNAVAILABLE",x+18,302,25,314,color);
+            if(i==0){fit(c,sample==null?"PC / OFFLINE":sample.optString("host","PC"),x+18,363,16,314,white);fit(c,receivedSample?"PACKET AGE / "+Math.max(0,(android.os.SystemClock.elapsedRealtime()-lastGood)/1000)+" s":"NO PACKET",x+18,402,13,314,muted);}
+            if(i==1){fit(c,"CPU / "+number(value(object("cpu"),"temperature"))+" °C",x+18,363,18,314,hot("cpu")?ALERT:white);fit(c,"GPU / "+number(value(object("gpu"),"temperature"))+" °C",x+18,402,18,314,hot("gpu")?ALERT:white);}
+            if(i==2){fit(c,!micReady?"MIC / UNAVAILABLE":mic.optBoolean("muted")?"MIC / MUTED":"MIC / ON",x+18,363,18,314,micReady&&mic.optBoolean("muted")?ALERT:white);fit(c,soundReady?"MIXER / ONLINE":"MIXER / OFFLINE",x+18,402,13,314,muted);}
+            fit(c,"LIVE STATUS / NODE 0"+(i+1),x+18,545,11,314,color);
+        }
+        text(c,"NERV // "+palette.signature(),44,650,15,secondary,medium);
+        text(c,"SOURCE / CURRENT TELEMETRY",44,700,11,muted,medium);
     }
     private void drawForecast(Canvas c) {
         java.time.Instant instant=java.time.Instant.now();
@@ -1017,6 +1086,18 @@ public class DashboardView extends View {
             return true;
         }
         float x=event.getX()*VIEWPORT_WIDTH/getWidth()+VIEWPORT_LEFT,y=event.getY()*VIEWPORT_HEIGHT/getHeight();
+        if(magiOpen){
+            if(event.getActionMasked()==MotionEvent.ACTION_UP){if(suppressMagiRelease)suppressMagiRelease=false;else magiOpen=false;logoArmed=false;removeCallbacks(logoHold);invalidate();}
+            return true;
+        }
+        if(!editing&&event.getActionMasked()==MotionEvent.ACTION_DOWN&&new RectF(36,12,280,88).contains(x,y)){
+            logoArmed=true;logoDownX=event.getX();logoDownY=event.getY();postDelayed(logoHold,ViewConfiguration.getLongPressTimeout());return true;
+        }
+        if(logoArmed){
+            if(event.getActionMasked()==MotionEvent.ACTION_MOVE&&Math.hypot(event.getX()-logoDownX,event.getY()-logoDownY)>ViewConfiguration.get(getContext()).getScaledTouchSlop())removeCallbacks(logoHold);
+            if(event.getActionMasked()==MotionEvent.ACTION_UP||event.getActionMasked()==MotionEvent.ACTION_CANCEL){logoArmed=false;removeCallbacks(logoHold);}
+            return true;
+        }
         if(handleFocusTouch(event,x,y))return true;
         if(!editing && event.getAction()==MotionEvent.ACTION_DOWN){
             pressedAudio=audioAt(x,y);
@@ -1075,5 +1156,6 @@ public class DashboardView extends View {
         }
         return true;
     }
-    @Override public boolean performClick() { super.performClick(); return true; }
+    @Override protected void onDetachedFromWindow(){removeCallbacks(logoHold);logoArmed=false;super.onDetachedFromWindow();}
+    @Override public boolean performClick() { super.performClick();onSound.accept("click");return true; }
 }
