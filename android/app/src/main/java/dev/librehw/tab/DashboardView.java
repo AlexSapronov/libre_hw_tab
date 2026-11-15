@@ -130,6 +130,7 @@ public class DashboardView extends View {
     private final RectF mediaPrevious=new RectF(877,605,957,685),mediaToggle=new RectF(973,605,1053,685),mediaNext=new RectF(1069,605,1149,685),mediaSeek=new RectF(204,657,840,691);
     public JSONObject media(){return displayMedia;}
     boolean mediaVisible(){return focusedMetric==null && !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
+    final EvaBootSequence boot=new EvaBootSequence();
     long wakeStarted,wakeDeadline;
     String wakeError="";
     boolean connected(){return sample!=null;}
@@ -137,7 +138,7 @@ public class DashboardView extends View {
     boolean canWake(){return !connected()&&!wakePending();}
     boolean beginWake(){
         if(!canWake())return false;
-        wakeStarted=android.os.SystemClock.elapsedRealtime();wakeDeadline=wakeStarted+60000;wakeError="";forceStandby=true;invalidate();return true;
+        wakeStarted=android.os.SystemClock.elapsedRealtime();wakeDeadline=wakeStarted+60000;wakeError="";closeFocus();boot.start(wakeStarted);forceStandby=true;invalidate();return true;
     }
     void failWake(String message){if(!wakePending()||connected())return;wakeDeadline=0;wakeError=message;invalidate();}
     void updateWake(){if(wakePending()&&android.os.SystemClock.elapsedRealtime()>=wakeDeadline)failWake(UiText.get("ПК не ответил за 1 минуту. Проверь питание и Wake-on-LAN."));}
@@ -181,7 +182,8 @@ public class DashboardView extends View {
     public void clear() {closeFocus();receivedSample=false; history.clear();trends.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = UiText.get("Подключение…"); invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
         sample = data;
-        if(data!=null&&wakePending()){wakeDeadline=0;wakeError="";forceStandby=false;}
+        if(data==null&&boot.active&&boot.linked>=0){boot.linked=-1;wakeDeadline=wakeStarted+60000;forceStandby=true;updateWake();}
+        if(data!=null&&(wakePending()||boot.active)){boot.connect(android.os.SystemClock.elapsedRealtime());wakeDeadline=0;wakeError="";forceStandby=false;}
         if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         trends.accept(data,now);
@@ -236,6 +238,13 @@ public class DashboardView extends View {
         palette=DashboardTheme.ALL[Math.max(0,Math.min(DashboardTheme.ALL.length-1,themeId))];
         nerv=palette.isNerv();
         accent=palette.primary;secondary=palette.secondary;panel=palette.panel;
+        long bootNow=android.os.SystemClock.elapsedRealtime();
+        if(boot.finished(bootNow,animations)){boot.active=false;}
+        if(boot.active&&!boot.revealing(bootNow,animations)){
+            boot.draw(c,getWidth(),getHeight(),bootNow,wakeDeadline,wakeError,palette,animations);
+            if(animations&&wakeError.isEmpty())postInvalidateOnAnimation();else postInvalidateDelayed(1000);
+            return;
+        }
         c.drawColor(palette.background);
         if(getWidth()==0 || getHeight()==0)return;
         c.save();c.scale(getWidth()/VIEWPORT_WIDTH,getHeight()/VIEWPORT_HEIGHT);c.translate(-VIEWPORT_LEFT,0);
@@ -276,14 +285,15 @@ public class DashboardView extends View {
         if(layout.metric("history"))drawBlock(c,"history",playing);
         if(mediaVisible())drawMedia(c);
         if(editing)drawEditor(c,playing);
-        finishAnimation(c,(playing?"game":"overview")+themeId);
+        if(!boot.active)finishAnimation(c,(playing?"game":"overview")+themeId);
         JSONObject game = object("game");
         if(!editing && sample!=null && !sample.isNull("sensorError"))fit(c,UiText.get("Ошибка чтения датчиков — проверь агент"),36,727,12,1128,ALERT);
         else if(!editing && game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
         if(!editing)drawStatus(c);
         drawInteraction(c);
         c.restore();
-        postInvalidateDelayed(1000);
+        if(boot.active){boot.draw(c,getWidth(),getHeight(),bootNow,wakeDeadline,wakeError,palette,animations);postInvalidateOnAnimation();}
+        else postInvalidateDelayed(1000);
     }
     private static int tint(int color,int alpha){return (color&0x00ffffff)|(alpha<<24);}
     private int surface(int fallback,int alpha){return nerv?tint(accent,alpha):fallback;}
@@ -996,6 +1006,16 @@ public class DashboardView extends View {
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
         if(getWidth()==0 || getHeight()==0)return false;
+        if(boot.active){
+            if(!wakeError.isEmpty()&&event.getActionMasked()==MotionEvent.ACTION_UP){
+                float bx=event.getX()*1200/getWidth(),by=event.getY()*760/getHeight();
+                if(by>=635&&by<=711){
+                    if(bx>=42&&bx<=582){performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);onWake.run();}
+                    else if(bx>=624&&bx<=1158){boot.active=false;forceStandby=true;invalidate();}
+                }
+            }
+            return true;
+        }
         float x=event.getX()*VIEWPORT_WIDTH/getWidth()+VIEWPORT_LEFT,y=event.getY()*VIEWPORT_HEIGHT/getHeight();
         if(handleFocusTouch(event,x,y))return true;
         if(!editing && event.getAction()==MotionEvent.ACTION_DOWN){

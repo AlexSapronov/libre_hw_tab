@@ -49,7 +49,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         config.setLocale(UiText.locale());
         super.attachBaseContext(base.createConfigurationContext(config));
     }
-    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putBoolean("demo",demo);if(dashboard!=null){out.putLong("wake_started",dashboard.wakeStarted);out.putLong("wake_deadline",dashboard.wakeDeadline);out.putString("wake_error",dashboard.wakeError);}}
+    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putBoolean("demo",demo);if(dashboard!=null){out.putLong("wake_started",dashboard.wakeStarted);out.putLong("wake_deadline",dashboard.wakeDeadline);out.putString("wake_error",dashboard.wakeError);out.putBoolean("boot_active",dashboard.boot.active);out.putLong("boot_started",dashboard.boot.started);out.putLong("boot_linked",dashboard.boot.linked);}}
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         demo=saved!=null && saved.getBoolean("demo",false);
@@ -79,7 +79,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
         dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
         dashboard.onMedia=this::mediaCommand;dashboard.onAudio=this::audioCommand;
-        if(saved!=null){dashboard.wakeStarted=saved.getLong("wake_started");dashboard.wakeDeadline=saved.getLong("wake_deadline");dashboard.wakeError=saved.getString("wake_error","");if(dashboard.wakePending()){dashboard.forceStandby=true;ui.postDelayed(wakeTimeout,Math.max(0,dashboard.wakeDeadline-android.os.SystemClock.elapsedRealtime()));}}
+        if(saved!=null){dashboard.wakeStarted=saved.getLong("wake_started");dashboard.wakeDeadline=saved.getLong("wake_deadline");dashboard.wakeError=saved.getString("wake_error","");dashboard.boot.active=saved.getBoolean("boot_active");dashboard.boot.started=saved.getLong("boot_started");dashboard.boot.linked=saved.getLong("boot_linked",-1);if(dashboard.wakePending()){dashboard.forceStandby=true;ui.postDelayed(wakeTimeout,Math.max(0,dashboard.wakeDeadline-android.os.SystemClock.elapsedRealtime()));}}
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);
