@@ -18,7 +18,7 @@ public class AtmosphereTest {
     @Test public void noticesAreEdgesAndMissingSamplesDoNotEndGamesOrClearThermalState()throws Exception{
         AtmosphereState s=new AtmosphereState();JSONObject d=DemoData.sample();d.getJSONObject("cpu").put("temperature",60);d.getJSONObject("gpu").put("temperature",65);d.getJSONObject("game").put("active",false).put("paused",false);
         s.accept(d,0);d.getJSONObject("game").put("active",true);assertEquals("confirm",s.accept(d,1));assertEquals("COMBAT TELEMETRY ENGAGED",s.notice);
-        assertEquals("",s.accept(d,2));s.accept(null,3);assertTrue(s.game);s.accept(d,4000);assertFalse(s.notice.equals("OPERATION COMPLETE"));
+        assertEquals("",s.accept(d,2));JSONObject withoutGame=new JSONObject(d.toString());withoutGame.remove("game");s.accept(withoutGame,2);assertTrue(s.game);s.accept(null,3);assertTrue(s.game);s.accept(d,4000);assertFalse(s.notice.equals("OPERATION COMPLETE"));
         d.getJSONObject("cpu").put("temperature",86);assertEquals("alert",s.accept(d,8000));assertEquals("CPU / THERMAL LIMIT",s.notice);assertEquals("",s.accept(d,9000));
         d.getJSONObject("cpu").put("temperature",84);s.accept(d,10000);assertTrue(s.cpuHot);d.getJSONObject("cpu").remove("temperature");s.accept(d,11000);assertTrue(s.cpuHot);
         d.getJSONObject("cpu").put("temperature",82);s.accept(d,12000);assertFalse(s.cpuHot);assertEquals("CPU / CONDITION NORMAL",s.notice);

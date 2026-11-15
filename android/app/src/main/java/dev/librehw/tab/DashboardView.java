@@ -342,6 +342,7 @@ public class DashboardView extends View {
         c.save();c.clipRect(18,h-7,w-18,h-2);
         for(int x=18;x<w-18;x+=16)line(c,x,h-7,x+8,h-2,tint(color,130),3);
         c.restore();
+        if(drawingBlock.equals("history")||drawingBlock.equals("memory")||drawingBlock.equals("network"))return;
         if(palette.name.equals("EVA-00")){
             for(int i=0;i<5;i++)line(c,w-38+i*5,h-20,w-38+i*5,h-20-(i%2==0?9:5),secondary,1);
             line(c,w-42,h-20,w-12,h-20,tint(secondary,150),1);

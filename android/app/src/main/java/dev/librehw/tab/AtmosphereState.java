@@ -16,7 +16,7 @@ final class AtmosphereState {
         if(!online)return sound;
         JSONObject current=sample.optJSONObject("game");
         boolean active=current!=null&&(current.optBoolean("active")||current.optBoolean("paused"));
-        if(active!=game){show(active?"COMBAT TELEMETRY ENGAGED":"OPERATION COMPLETE",1,now);sound="confirm";game=active;}
+        if(current!=null&&current.has("active")&&active!=game){show(active?"COMBAT TELEMETRY ENGAGED":"OPERATION COMPLETE",1,now);sound="confirm";game=active;}
         for(String key:new String[]{"cpu","gpu"}){
             JSONObject data=sample.optJSONObject(key);double temp=data==null?Double.NaN:data.optDouble("temperature",Double.NaN);
             if(!Double.isFinite(temp))continue;
