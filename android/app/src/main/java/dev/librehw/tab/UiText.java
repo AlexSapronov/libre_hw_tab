@@ -250,6 +250,10 @@ final class UiText {
         map.put("0,1% LOW","0.1% LOW");
         map.put("0,1% ","0.1% ");
         map.put("0,1% low","0.1% low");
+        map.put("ЗАПУСК ПК","STARTING PC");
+        map.put("ПОВТОРИТЬ ЗАПУСК","RETRY WAKE");
+        map.put("ПК не ответил за 1 минуту. Проверь питание и Wake-on-LAN.","No response after 1 minute. Check power and Wake-on-LAN.");
+        map.put("Не удалось отправить команду пробуждения","Could not send wake command");
         EN=Collections.unmodifiableMap(map);
     }
 }
