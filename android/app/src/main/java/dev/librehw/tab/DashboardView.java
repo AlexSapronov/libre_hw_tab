@@ -799,10 +799,10 @@ public class DashboardView extends View {
     }
     private void drawStandby(Canvas c) {
         button(c,clockBack,UiText.get("ПАНЕЛЬ"));button(c,settingsHit,UiText.get("НАСТРОЙКИ"));
-        java.time.ZonedDateTime now=java.time.ZonedDateTime.now();
+        java.time.ZonedDateTime clockNow=java.time.ZonedDateTime.now();
         text(c,nerv?"NERV // STANDBY":"LIBRE // STANDBY",60,180,16,accent,medium);
-        text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
-        text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",UiText.locale())),60,455,25,muted,regular);
+        text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
+        text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",UiText.locale())),60,455,25,muted,regular);
         String city=weather==null?weatherCity:weather.optString("city","Санкт-Петербург");
         fit(c,UiText.get(city),730,175,25,410,white);
         if(weather==null){fit(c,weatherStatus,730,255,22,410,muted);fit(c,weatherHint,730,305,13,410,muted);}
