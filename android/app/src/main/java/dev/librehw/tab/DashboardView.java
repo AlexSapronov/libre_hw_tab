@@ -16,9 +16,10 @@ public class DashboardView extends View {
     private float logoDownX,logoDownY;
     private String screenKey="";
     private long screenTransition=-10000;
-    private final Runnable logoHold=()->{
+    private final Runnable logoHold=this::openMagiFromHold;
+    private void openMagiFromHold(){
         if(logoArmed&&!editing&&!boot.active){magiOpen=true;suppressMagiRelease=true;performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);onSound.accept("confirm");invalidate();}
-    };
+    }
     private final Runnable settings, theme;
     private static final class ThermalPoint {
         final long time; final float[] values;
