@@ -822,7 +822,7 @@ public class DashboardView extends View {
         boolean waking=wakePending();long now=android.os.SystemClock.elapsedRealtime();
         int powerColor=wakeError.isEmpty()?accent:ALERT;
         box(c,32,556,572,143,powerColor);
-        box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?surface(0xFF182C38,35):powerColor);
+        box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?panel:powerColor);
         int ink=waking?white:0xFF09121C;
         p.setColor(waking?accent:ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
         c.save();c.translate(90,627);c.scale(1/aspectRatio(),1);c.translate(-90,-627);

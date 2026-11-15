@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 public class WakeFeedbackTest {
     DashboardView view(){DashboardView v=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});v.layout(0,0,1340,800);v.themeId=8;v.detailLevel=2;v.forceStandby=true;return v;}
     @Test public void waitingEndsAtConnectionOrExactlyOneMinute()throws Exception{
-        DashboardView v=view();assertTrue(v.beginWake());assertFalse(v.beginWake());
+        DashboardView v=view();assertTrue(v.beginWake());assertFalse(v.beginWake());render(v,"wake-start");
         ShadowSystemClock.advanceBy(Duration.ofSeconds(59));v.updateWake();assertTrue(v.wakePending());render(v,"wake-pending");
         ShadowSystemClock.advanceBy(Duration.ofSeconds(1));v.updateWake();assertFalse(v.wakePending());assertFalse(v.wakeError.isEmpty());render(v,"wake-timeout");
         assertTrue(v.beginWake());assertTrue(v.wakeError.isEmpty());v.accept(DemoData.sample(),"",false);assertFalse(v.wakePending());assertFalse(v.forceStandby);assertFalse(v.canWake());
