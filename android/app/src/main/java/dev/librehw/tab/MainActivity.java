@@ -29,7 +29,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private android.content.SharedPreferences preferences;
     private HttpURLConnection connection;
     private ScheduledExecutorService extras;
-    private long lastWake;
+    private final Runnable wakeTimeout=()->{if(dashboard!=null){dashboard.updateWake();}};
     private final ExecutorService audioWorker=Executors.newSingleThreadExecutor();
     private final ExecutorService mediaWorker=Executors.newSingleThreadExecutor();
     private volatile boolean mediaBusy,thumbnailBusy;
@@ -49,7 +49,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         config.setLocale(UiText.locale());
         super.attachBaseContext(base.createConfigurationContext(config));
     }
-    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putBoolean("demo",demo);}
+    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putBoolean("demo",demo);if(dashboard!=null){out.putLong("wake_started",dashboard.wakeStarted);out.putLong("wake_deadline",dashboard.wakeDeadline);out.putString("wake_error",dashboard.wakeError);}}
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         demo=saved!=null && saved.getBoolean("demo",false);
@@ -79,6 +79,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.onMenu=this::menu;dashboard.onAlarm=this::alarm;dashboard.onWeather=this::weatherActions;dashboard.onWake=this::wake;
         dashboard.onEditorSave=this::saveEditor;dashboard.onEditorCancel=this::cancelEditor;dashboard.onEditorOptions=this::editorOptions;
         dashboard.onMedia=this::mediaCommand;dashboard.onAudio=this::audioCommand;
+        if(saved!=null){dashboard.wakeStarted=saved.getLong("wake_started");dashboard.wakeDeadline=saved.getLong("wake_deadline");dashboard.wakeError=saved.getString("wake_error","");if(dashboard.wakePending()){dashboard.forceStandby=true;ui.postDelayed(wakeTimeout,Math.max(0,dashboard.wakeDeadline-android.os.SystemClock.elapsedRealtime()));}}
         setContentView(dashboard);
         immersive();
         if (address.isEmpty()) ui.post(this::settings);
@@ -395,12 +396,15 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         }).setNeutralButton("Open-Meteo",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://open-meteo.com/")));}catch(ActivityNotFoundException ignored){}}).setNegativeButton(UiText.get("Отмена"),null).show();
     }
     private void wake() {
-        long now=android.os.SystemClock.elapsedRealtime();if(lastWake>0 && now-lastWake<10000)return;lastWake=now;dashboard.wakeSentUntil=now+10000;dashboard.invalidate();
+        if(!dashboard.beginWake())return;
+        final long attempt=dashboard.wakeDeadline;
+        ui.removeCallbacks(wakeTimeout);ui.postDelayed(wakeTimeout,60000);
         pairingWorker.submit(()->{
-            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));ui.post(()->{dashboard.forceStandby=false;dashboard.invalidate();Toast.makeText(this,UiText.get("Команда отправлена. Жду подключения к ПК…"),Toast.LENGTH_LONG).show();});}
-            catch(Exception ex){ui.post(()->{lastWake=0;dashboard.wakeSentUntil=0;dashboard.invalidate();Toast.makeText(this,ex.getMessage(),Toast.LENGTH_LONG).show();});}
+            try{WakeClient.send(new JSONArray(preferences.getString("wake_targets","[]")));}
+            catch(Exception ex){ui.post(()->{if(dashboard.wakeDeadline==attempt){dashboard.failWake(ex.getMessage()==null?UiText.get("Не удалось отправить команду пробуждения"):ex.getMessage());ui.removeCallbacks(wakeTimeout);}});}
         });
     }
+
     private void wakeOptions() {
         new AlertDialog.Builder(this).setTitle("Wake-on-LAN")
             .setMessage(UiText.get("Пробуждение требует включённого Wake-on-LAN в BIOS и настройках сетевой карты. Из полного выключения поддержка зависит от платы. ПК должен быть подключён к питанию; надёжнее Ethernet. Команда отправляется только по домашней сети."))
@@ -412,6 +416,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {
+        ui.removeCallbacks(wakeTimeout);
         cancelPairing(); pairingWorker.shutdownNow();mediaWorker.shutdownNow();audioWorker.shutdownNow();
         if (pairingDialog != null) pairingDialog.dismiss();
         super.onDestroy();

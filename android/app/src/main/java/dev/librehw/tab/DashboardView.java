@@ -130,7 +130,17 @@ public class DashboardView extends View {
     private final RectF mediaPrevious=new RectF(877,605,957,685),mediaToggle=new RectF(973,605,1053,685),mediaNext=new RectF(1069,605,1149,685),mediaSeek=new RectF(204,657,840,691);
     public JSONObject media(){return displayMedia;}
     boolean mediaVisible(){return focusedMetric==null && !editing && sample!=null && media()!=null && !media().optString("id").isEmpty();}
-    public long wakeSentUntil;
+    long wakeStarted,wakeDeadline;
+    String wakeError="";
+    boolean connected(){return sample!=null;}
+    boolean wakePending(){return wakeDeadline>0;}
+    boolean canWake(){return !connected()&&!wakePending();}
+    boolean beginWake(){
+        if(!canWake())return false;
+        wakeStarted=android.os.SystemClock.elapsedRealtime();wakeDeadline=wakeStarted+60000;wakeError="";forceStandby=true;invalidate();return true;
+    }
+    void failWake(String message){if(!wakePending()||connected())return;wakeDeadline=0;wakeError=message;invalidate();}
+    void updateWake(){if(wakePending()&&android.os.SystemClock.elapsedRealtime()>=wakeDeadline)failWake(UiText.get("ПК не ответил за 1 минуту. Проверь питание и Wake-on-LAN."));}
     public String weatherCity="Санкт-Петербург";
     public String weatherHint=UiText.get("Нажми, чтобы обновить");
     public String weatherStatus=UiText.get("Погода загружается…");
@@ -170,7 +180,9 @@ public class DashboardView extends View {
     }
     public void clear() {closeFocus();receivedSample=false; history.clear();trends.clear();fpsHistory.clear();fpsSource="";displayMedia=null;mediaTransition=false;mediaThumbnail=null;audioOverride=null;audioDrag=null;audioPreview=Double.NaN; sample = null; error = UiText.get("Подключение…"); invalidate(); }
     public void accept(JSONObject data, String error, boolean demo) {
-        sample = data; if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
+        sample = data;
+        if(data!=null&&wakePending()){wakeDeadline=0;wakeError="";forceStandby=false;}
+        if(data==null)audioOverride=null; if(data!=null){lastGood=android.os.SystemClock.elapsedRealtime();receivedSample=true;} this.error = error; this.demo = demo;
         long now=android.os.SystemClock.elapsedRealtime();
         trends.accept(data,now);
         JSONObject incoming=data==null?null:data.optJSONObject("media");
@@ -220,7 +232,7 @@ public class DashboardView extends View {
         p.setShader(null); p.setColor(color); p.setStrokeWidth(stroke); p.setStyle(Paint.Style.STROKE); c.drawLine(x,y,endX,endY,p); p.setStyle(Paint.Style.FILL);
     }
     @Override protected void onDraw(Canvas c) {
-        super.onDraw(c);
+        super.onDraw(c);updateWake();
         palette=DashboardTheme.ALL[Math.max(0,Math.min(DashboardTheme.ALL.length-1,themeId))];
         nerv=palette.isNerv();
         accent=palette.primary;secondary=palette.secondary;panel=palette.panel;
@@ -787,10 +799,10 @@ public class DashboardView extends View {
     }
     private void drawStandby(Canvas c) {
         button(c,clockBack,UiText.get("ПАНЕЛЬ"));button(c,settingsHit,UiText.get("НАСТРОЙКИ"));
-        java.time.ZonedDateTime now=java.time.ZonedDateTime.now();
+        java.time.ZonedDateTime clockNow=java.time.ZonedDateTime.now();
         text(c,nerv?"NERV // STANDBY":"LIBRE // STANDBY",60,180,16,accent,medium);
-        text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
-        text(c,now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",UiText.locale())),60,455,25,muted,regular);
+        text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),52,390,164,white,digits);
+        text(c,clockNow.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",UiText.locale())),60,455,25,muted,regular);
         String city=weather==null?weatherCity:weather.optString("city","Санкт-Петербург");
         fit(c,UiText.get(city),730,175,25,410,white);
         if(weather==null){fit(c,weatherStatus,730,255,22,410,muted);fit(c,weatherHint,730,305,13,410,muted);}
@@ -806,17 +818,28 @@ public class DashboardView extends View {
         drawForecast(c);
         line(c,730,543,1142,543,surface(0xFF263446,35),1);
         text(c,UiText.get("БУДИЛЬНИК  +"),730,575,13,accent,medium);fit(c,nextAlarm,730,615,23,410,white);
-        boolean waking=android.os.SystemClock.elapsedRealtime()<wakeSentUntil;
-        int powerColor=accent;
+        if(connected())return;
+        boolean waking=wakePending();long now=android.os.SystemClock.elapsedRealtime();
+        int powerColor=wakeError.isEmpty()?accent:ALERT;
         box(c,32,556,572,143,powerColor);
-        box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?0xFF263C43:powerColor);
+        box(c,clockWake.left,clockWake.top,clockWake.width(),clockWake.height(),waking?panel:powerColor);
         int ink=waking?white:0xFF09121C;
-        p.setColor(ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
+        p.setColor(waking?accent:ink);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setStrokeCap(Paint.Cap.ROUND);
         c.save();c.translate(90,627);c.scale(1/aspectRatio(),1);c.translate(-90,-627);
-        c.drawArc(new RectF(65,602,115,652),-55,290,false,p);c.drawLine(90,590,90,624,p);c.restore();
+        float phase=animations?(now%1500)/1500f*360:0;
+        c.drawArc(new RectF(65,602,115,652),waking?phase:-55,waking?245:290,false,p);
+        if(!waking)c.drawLine(90,590,90,624,p);c.restore();
         p.setStyle(Paint.Style.FILL);p.setStrokeCap(Paint.Cap.BUTT);
-        text(c,waking?UiText.get("КОМАНДА ОТПРАВЛЕНА"):UiText.get("ВКЛЮЧИТЬ ПК"),145,618,28,ink,medium);
-        text(c,waking?UiText.get("ЖДУ ПОДКЛЮЧЕНИЯ…"):UiText.get("ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN"),145,654,13,ink,regular);
+        fit(c,waking?UiText.get("ЗАПУСК ПК"):wakeError.isEmpty()?UiText.get("ВКЛЮЧИТЬ ПК"):UiText.get("ПОВТОРИТЬ ЗАПУСК"),145,610,28,425,ink);
+        if(waking){
+            long seconds=Math.max(0,(wakeDeadline-now+999)/1000);
+            fit(c,UiText.get("ЖДУ ПОДКЛЮЧЕНИЯ…")+" "+seconds+UiText.get(" с"),145,641,14,420,ink);
+            float progress=Math.max(0,Math.min(1,(now-wakeStarted)/60000f));
+            line(c,145,669,570,669,tint(accent,55),4);line(c,145,669,145+425*progress,669,accent,4);
+            if(animations)postInvalidateOnAnimation();else postInvalidateDelayed(250);
+        }else{
+            fit(c,wakeError.isEmpty()?UiText.get("ВКЛЮЧИТЬ / РАЗБУДИТЬ · WAKE-ON-LAN"):wakeError,145,645,12,420,ink);
+        }
 
     }
     private void drawForecast(Canvas c) {
@@ -931,7 +954,7 @@ public class DashboardView extends View {
     }
     private RectF controlAt(float x,float y) {
         if(editing){for(RectF r:new RectF[]{themeHit,settingsHit,new RectF(655,20,820,86)})if(r.contains(x,y))return r;return null;}
-        if(standby()){for(RectF r:new RectF[]{clockBack,settingsHit,clockWake,clockAlarm,clockWeather})if(r.contains(x,y))return r;return null;}
+        if(standby()){for(RectF r:new RectF[]{clockBack,settingsHit,clockWake,clockAlarm,clockWeather})if(r.contains(x,y)&& (r!=clockWake||canWake()))return r;return null;}
         AudioControl audio=audioAt(x,y);if(audio!=null)return audio.hit;
         if(mediaVisible() && !mediaTransition && !mediaCommandPending) {
             JSONObject m=media();
@@ -1011,7 +1034,7 @@ public class DashboardView extends View {
             }
             if(standby()) {
                 if(clockBack.contains(x,y))suppressStandby();else if(settingsHit.contains(x,y))onMenu.run();
-                else if(clockAlarm.contains(x,y))onAlarm.run();else if(clockWeather.contains(x,y))onWeather.run();else if(clockWake.contains(x,y))onWake.run();
+                else if(clockAlarm.contains(x,y))onAlarm.run();else if(clockWeather.contains(x,y))onWeather.run();else if(clockWake.contains(x,y)&&canWake())onWake.run();
             } else if(settingsHit.contains(x,y))settings.run();else if(menuHit.contains(x,y))onMenu.run();
             else if(modeHit.contains(x,y))onModeChange.run();else if(themeHit.contains(x,y))theme.run();
             invalidate();
