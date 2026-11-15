@@ -50,7 +50,7 @@ final class EvaBootSequence {
         text(c,"NERV",42,78,50,color);text(c,"AUTONOMOUS STARTUP CONTROL",255,48,13,MUTED);
         text(c,theme.name+" / MAGI SYSTEM",255,75,19,color);
         text(c,"SEQ 01 / WAKE-ON-LAN",865,50,13,MUTED);
-        text(c,error.isEmpty()?ready?"LINK / ESTABLISHED":"LINK / ACQUIRING":"LINK / TIMEOUT",865,75,15,color);
+        text(c,error.isEmpty()?ready?"LINK / ESTABLISHED":"LINK / ACQUIRING":"LINK / UNAVAILABLE",865,75,15,color);
         line(c,42,98,1158,98,color,2);
         String stage=!error.isEmpty()?UiText.get("ЗАПУСК ПРЕРВАН"):ready?UiText.get("СВЯЗЬ УСТАНОВЛЕНА"):elapsed<1300?UiText.get("ПОДАЧА ПИТАНИЯ"):elapsed<2800?UiText.get("ИНИЦИАЛИЗАЦИЯ MAGI"):elapsed<4500?UiText.get("СИНХРОНИЗАЦИЯ ИНТЕРФЕЙСА"):UiText.get("ОЖИДАНИЕ ТЕЛЕМЕТРИИ");
         text(c,stage,42,156,31,color);

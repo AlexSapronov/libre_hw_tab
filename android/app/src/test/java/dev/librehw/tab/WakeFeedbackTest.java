@@ -17,6 +17,7 @@ public class WakeFeedbackTest {
         ShadowSystemClock.advanceBy(Duration.ofSeconds(59));v.updateWake();assertTrue(v.wakePending());render(v,"wake-pending");
         ShadowSystemClock.advanceBy(Duration.ofSeconds(1));v.updateWake();assertFalse(v.wakePending());assertFalse(v.wakeError.isEmpty());render(v,"wake-timeout");
         assertTrue(v.beginWake());assertTrue(v.wakeError.isEmpty());v.accept(DemoData.sample(),"",false);assertFalse(v.wakePending());assertFalse(v.forceStandby);assertFalse(v.canWake());
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(7));render(v,"wake-dashboard-arrived");
         v.forceStandby=true;render(v,"wake-connected-hidden");int[] clicks={0};v.onWake=()->clicks[0]++;tap(v);assertEquals(0,clicks[0]);
         v.accept(null,"",false);assertTrue(v.canWake());assertTrue(v.beginWake());v.failWake("Send failed");assertEquals("Send failed",v.wakeError);assertTrue(v.canWake());
     }

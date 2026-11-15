@@ -285,7 +285,7 @@ public class DashboardView extends View {
         if(layout.metric("history"))drawBlock(c,"history",playing);
         if(mediaVisible())drawMedia(c);
         if(editing)drawEditor(c,playing);
-        finishAnimation(c,(playing?"game":"overview")+themeId);
+        if(!boot.active)finishAnimation(c,(playing?"game":"overview")+themeId);
         JSONObject game = object("game");
         if(!editing && sample!=null && !sample.isNull("sensorError"))fit(c,UiText.get("Ошибка чтения датчиков — проверь агент"),36,727,12,1128,ALERT);
         else if(!editing && game!=null && !game.optBoolean("active") && !game.optString("status").matches("idle|ready|starting"))fit(c,"FPS: "+game.optString("status"),36,727,12,1128,muted);
