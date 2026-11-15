@@ -265,6 +265,9 @@ final class UiText {
         map.put("НАЗАД К ЧАСАМ","BACK TO CLOCK");
         map.put("ОТКРЫТИЕ КАНАЛА УПРАВЛЕНИЯ","OPENING CONTROL CHANNEL");
         map.put("ОЖИДАНИЕ ОТВЕТА ПК","WAITING FOR PC RESPONSE");
+        map.put("Звуки интерфейса","Interface sounds");
+        map.put("Громкость эффектов","Effect volume");
+        map.put("ТАП ИЛИ BACK — НАЗАД","TAP OR BACK TO RETURN");
         EN=Collections.unmodifiableMap(map);
     }
 }

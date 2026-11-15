@@ -38,6 +38,9 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private volatile long nextWeatherAttempt;
     private volatile boolean forceWeather;
     private String weatherError="";
+    private final InterfaceSound interfaceSound=new InterfaceSound();
+    private boolean soundEnabled;
+    private int soundVolume;
     private int editorPreviousMode;
     private String editorPreviousLayout;
     private final Runnable alarmTick=new Runnable(){public void run(){if(active){updateAlarm();ui.postDelayed(this,30000);}}};
@@ -70,6 +73,9 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         dashboard.layout=DashboardLayout.parse(savedLayout);
         dashboard.autoStandby=preferences.getBoolean("auto_standby",true);
         dashboard.animations=preferences.getBoolean("animations",true);
+        soundEnabled=preferences.getBoolean("interface_sound",false);
+        soundVolume=Math.max(0,Math.min(100,preferences.getInt("sound_volume",15)));
+        dashboard.onSound=cue->{if(soundEnabled&&active)interfaceSound.play(cue,soundVolume);};
         dashboard.detailLevel=Math.max(0,Math.min(2,preferences.getInt("detail_level",1)));
         getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
             @Override public void handleOnBackPressed(){if(!dashboard.closeFocus()){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();setEnabled(true);}}
@@ -88,7 +94,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         super.onResume(); active=true;restart();ui.post(alarmTick);
         extras=Executors.newSingleThreadScheduledExecutor();if(weatherEnabled())extras.scheduleWithFixedDelay(this::refreshWeather,0,30,TimeUnit.SECONDS);
     }
-    @Override protected void onPause() { active=false;stop();ui.removeCallbacks(alarmTick);if(extras!=null)extras.shutdownNow();super.onPause(); }
+    @Override protected void onPause() { active=false;interfaceSound.release();stop();ui.removeCallbacks(alarmTick);if(extras!=null)extras.shutdownNow();super.onPause(); }
     @Override public void onWindowFocusChanged(boolean focus) { super.onWindowFocusChanged(focus); if (focus) immersive(); }
     private void immersive() {
         Window window=getWindow();
@@ -112,10 +118,11 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void toggleTheme() {
         String[] labels = new String[DashboardTheme.ALL.length];
-        for(int i=0;i<labels.length;i++)labels[i]=UiText.get(DashboardTheme.ALL[i].description);
+        int selected=0;
+        for(int i=0;i<labels.length;i++){labels[i]=UiText.get(DashboardTheme.ALL[DashboardTheme.MENU_ORDER[i]].description);if(DashboardTheme.MENU_ORDER[i]==dashboard.themeId)selected=i;}
         new AlertDialog.Builder(this).setTitle(UiText.get("Оформление"))
-            .setSingleChoiceItems(labels,dashboard.themeId,(dialog,which)->{
-                dashboard.themeId=which; preferences.edit().putInt("theme_id",which).apply();
+            .setSingleChoiceItems(labels,selected,(dialog,which)->{
+                dashboard.themeId=DashboardTheme.MENU_ORDER[which]; preferences.edit().putInt("theme_id",dashboard.themeId).apply();
                 dashboard.invalidate(); dialog.dismiss();
             }).setNegativeButton(UiText.get("Закрыть"),null).show();
     }
@@ -279,16 +286,30 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void menu() {
         new AlertDialog.Builder(this).setTitle("Libre HW Tab")
-            .setItems(new String[]{UiText.get("Экран ожидания"),UiText.get("Редактор блоков"),UiText.get("Погода: выбрать город"),UiText.get("Будильник"),"Wake-on-LAN",UiText.get("Автоожидание: ")+(dashboard.autoStandby?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Анимации: ")+(dashboard.animations?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Подключение"),UiText.get("Оформление: ")+DashboardView.detailLabels()[dashboard.detailLevel],UiText.get("Язык / Language: ")+(UiText.language().equals("en")?"English":"Русский")},(d,index)->{
+            .setItems(new String[]{UiText.get("Экран ожидания"),UiText.get("Редактор блоков"),UiText.get("Погода: выбрать город"),UiText.get("Будильник"),"Wake-on-LAN",UiText.get("Автоожидание: ")+(dashboard.autoStandby?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Анимации: ")+(dashboard.animations?UiText.get("вкл"):UiText.get("выкл")),UiText.get("Подключение"),UiText.get("Оформление: ")+DashboardView.detailLabels()[dashboard.detailLevel],UiText.get("Язык / Language: ")+(UiText.language().equals("en")?"English":"Русский"),UiText.get("Звуки интерфейса")+": "+UiText.get(soundEnabled?"вкл":"выкл")},(d,index)->{
                 if(index==0){dashboard.forceStandby=true;dashboard.invalidate();}
                 else if(index==1)new AlertDialog.Builder(this).setTitle(UiText.get("Какой макет изменить?")).setItems(new String[]{UiText.get("Обзор"),UiText.get("Игра")},(v,choice)->beginEditor(choice==1)).show();
                 else if(index==2)weatherCity();else if(index==3)alarm();else if(index==4)wakeOptions();
                 else if(index==5){dashboard.autoStandby=!dashboard.autoStandby;preferences.edit().putBoolean("auto_standby",dashboard.autoStandby).apply();dashboard.invalidate();}
                 else if(index==8){designDetail();}
                 else if(index==9){language();}
+                else if(index==10){soundSettings();}
                 else if(index==6){dashboard.animations=!dashboard.animations;preferences.edit().putBoolean("animations",dashboard.animations).apply();}
                 else settings();
             }).setNegativeButton(UiText.get("Закрыть"),null).show();
+    }
+    private void soundSettings(){
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(32,16,32,12);
+        Switch enabled=new Switch(this);enabled.setText(UiText.get("Звуки интерфейса"));enabled.setChecked(soundEnabled);content.addView(enabled);
+        TextView level=new TextView(this);level.setText(UiText.get("Громкость эффектов")+": "+soundVolume+"%");content.addView(level);
+        SeekBar slider=new SeekBar(this);slider.setMax(100);slider.setProgress(soundVolume);content.addView(slider);
+        enabled.setOnCheckedChangeListener((button,on)->{soundEnabled=on;preferences.edit().putBoolean("interface_sound",on).apply();if(on)interfaceSound.play("confirm",soundVolume);else interfaceSound.release();});
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar bar,int value,boolean user){soundVolume=value;level.setText(UiText.get("Громкость эффектов")+": "+value+"%");}
+            public void onStartTrackingTouch(SeekBar bar){}
+            public void onStopTrackingTouch(SeekBar bar){preferences.edit().putInt("sound_volume",soundVolume).apply();if(soundEnabled)interfaceSound.play("click",soundVolume);}
+        });
+        new AlertDialog.Builder(this).setTitle(UiText.get("Звуки интерфейса")).setView(content).setPositiveButton(UiText.get("Готово"),null).show();
     }
     private void language(){
         new AlertDialog.Builder(this).setTitle(UiText.get("Язык / Language"))
@@ -416,7 +437,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void cancelPairing() { pairingGeneration++; if (pairingTask != null) pairingTask.cancel(true); }
     @Override protected void onDestroy() {
-        ui.removeCallbacks(wakeTimeout);
+        ui.removeCallbacks(wakeTimeout);interfaceSound.release();
         cancelPairing(); pairingWorker.shutdownNow();mediaWorker.shutdownNow();audioWorker.shutdownNow();
         if (pairingDialog != null) pairingDialog.dismiss();
         super.onDestroy();

@@ -14,6 +14,10 @@ final class DashboardTheme {
         return "MAGI / CENTRAL COMMAND";
     }
     boolean isNerv() { return name.equals("NERV") || name.startsWith("EVA-"); }
+    // Presentation order only: persisted theme_id values remain stable.
+    static final int[] MENU_ORDER={7,8,9,1,6,0,2,3,4,5};
+    int transitionMillis(){return name.equals("EVA-00")?500:name.equals("EVA-01")?440:name.equals("EVA-02")?320:400;}
+    String signature(){return name.equals("EVA-00")?"PROTOTYPE / CALIBRATION":name.equals("EVA-01")?"SYNCHRONIZATION / HEX BUS":name.equals("EVA-02")?"COMBAT SYSTEM / ARMED":"MAGI / CONTROL";}
     static final DashboardTheme[] ALL={
         new DashboardTheme("JADE","Jade — мята и янтарь","#5EF2CA","#FFBA75","#070C15","#101B29","#25205049"),
         new DashboardTheme("EVA","EVA — кислотный зелёный и фиолетовый","#BCFF51","#B598FF","#0B0915","#171126","#352E165B"),

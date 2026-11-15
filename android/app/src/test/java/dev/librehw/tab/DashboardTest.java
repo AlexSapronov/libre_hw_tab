@@ -20,6 +20,7 @@ public class DashboardTest {
         int[] clicks = {0,0};
         DashboardView view = new DashboardView(context, () -> clicks[0]++, () -> clicks[1]++);
         view.layout(0,0,1340,800);
+        view.animations=false; // Pixel geometry is measured after transitions, not during a clipped entrance.
         JSONObject data = DemoData.sample();
         for(int i=0;i<180;i++) {
             data.getJSONObject("cpu").put("temperature",58+Math.sin(i/15.0)*8);
