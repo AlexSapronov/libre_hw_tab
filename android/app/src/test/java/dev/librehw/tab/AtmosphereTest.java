@@ -27,12 +27,14 @@ public class AtmosphereTest {
     }
     DashboardView view()throws Exception{DashboardView v=new DashboardView(RuntimeEnvironment.getApplication(),()->{},()->{});v.layout(0,0,1340,800);v.themeId=8;v.detailLevel=2;v.mode=1;v.animations=false;v.autoStandby=false;v.accept(DemoData.sample(),"",false);return v;}
     @Test public void magiLongPressShowsRealStateAndReleaseDoesNotImmediatelyDismiss()throws Exception{
-        DashboardView v=view();render(v,"atmosphere-overview");String saved=v.layout.json();
+        DashboardView v=view();
+        var controller=Robolectric.buildActivity(android.app.Activity.class).setup();controller.get().setContentView(v);v.layout(0,0,1340,800);
+        render(v,"atmosphere-overview");String saved=v.layout.json();
         touch(v,MotionEvent.ACTION_DOWN,90,45);Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(ViewConfiguration.getLongPressTimeout()+1));assertTrue(v.magiOpen);
         touch(v,MotionEvent.ACTION_UP,90,45);assertTrue(v.magiOpen);render(v,"atmosphere-magi-live");assertTrue(v.closeFocus());assertFalse(v.magiOpen);assertEquals(saved,v.layout.json());
         touch(v,0,90,45);touch(v,2,500,400);Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));touch(v,1,500,400);assertFalse(v.magiOpen);
         v.accept(null,"offline",false);v.magiOpen=true;render(v,"atmosphere-magi-offline");assertTrue(v.closeFocus());
-        v.editing=true;touch(v,0,90,45);Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));touch(v,1,90,45);assertFalse(v.magiOpen);
+        v.editing=true;touch(v,0,90,45);Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));touch(v,1,90,45);assertFalse(v.magiOpen);controller.pause().stop().destroy();
     }
     @Test public void renderThemeCharactersEventsStandbyAndTransitions()throws Exception{
         DashboardView v=view();JSONObject d=DemoData.sample();d.getJSONObject("cpu").put("temperature",60);d.getJSONObject("gpu").put("temperature",65);d.getJSONObject("game").put("active",false).put("paused",false);v.accept(d,"",false);
