@@ -553,25 +553,39 @@ public class DashboardView extends View {
         hardwareSection(c,second,"CPU",object("cpu"),accent,0);
     }
     private void hardwareSection(Canvas c,RectF r,String title,JSONObject data,int color,int series) {
-        boolean compact=r.height()<190;float temperature=value(data,"temperature"),load=value(data,"load");
-        float tempSize=bounded(Math.min(r.width()*.35f,r.height()*.24f),24,68);
-        if(r.height()>=65)text(c,title,r.left,r.top+12,12,color,medium);
-        if(compact) {
-            String values=(layout.metric("temperature")?number(temperature)+"°C":"")+(layout.metric("temperature")&&layout.metric("load")?" / ":"")+(layout.metric("load")?number(load)+"%":"");
-            if(r.height()<65){fit(c,title+" "+values,r.left,r.top+Math.min(20,r.height()-8),bounded(r.height()*.55f,9,14),r.width(),color);trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,r.bottom-5,r.width(),4,color,false);return;}
-            fit(c,values,r.left,r.top+40,24,r.width(),white);
-            if(layout.metric("temperature"))trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,r.top+52,r.width(),Math.max(4,Math.min(28,r.height()-90)),color,false);
-            if(layout.metric("load") && r.height()>65)nervSegments(c,r.left,r.bottom-18,r.width(),14,load,color,16);return;
+        float temperature=value(data,"temperature"),load=value(data,"load");
+        boolean showTemperature=layout.metric("temperature"),showLoad=layout.metric("load");
+        String prefix=series==0?"cpu":"gpu";
+        int thermal=Float.isFinite(temperature)&&temperature>=(series==0?85:83)?ALERT:color;
+        if(r.height()<125){
+            // Short user-sized cards still identify both readings explicitly.
+            float row=r.height()/Math.max(1,(showTemperature?1:0)+(showLoad?1:0));int index=0;
+            if(showTemperature){
+                float y=r.top+index++*row;
+                fit(c,UiText.get("ТЕМПЕРАТУРА")+" "+number(temperature)+"°C",r.left,y+Math.min(22,row-8),12,r.width(),thermal);
+                trend(c,prefix+".temperature",r.left,y+row-7,r.width(),4,thermal,false);
+            }
+            if(showLoad){
+                float y=r.top+index*row;
+                fit(c,UiText.get("ЗАГРУЗКА")+" "+number(load)+"%",r.left,y+Math.min(22,row-8),12,r.width(),color);
+                nervSegments(c,r.left,y+row-8,r.width(),5,load,color,16);
+            }
+            return;
         }
-        float baseline=r.top+tempSize+27;
-        if(layout.metric("temperature")){valueWithUnit(c,number(temperature),r.left,baseline,tempSize,"°C",bounded(tempSize*.32f,12,24),tempSize*.35f,Float.isFinite(temperature)&&temperature>=(series==0?85:83)?ALERT:color);text(c,UiText.get("ТЕМПЕРАТУРА"),r.left,baseline+18,10,muted,medium);}
-        if(layout.metric("temperature"))trend(c,(series==0?"cpu":"gpu")+".temperature",r.left,baseline+24,r.width(),Math.max(4,Math.min(28,r.top+r.height()*.73f-48-(baseline+24))),color,false);
-        if(layout.metric("load")) {
-            float barY=layout.metric("temperature")?r.top+r.height()*.73f:r.top+65;
-            text(c,"LOAD",r.left,barY-14,10,muted,medium);p.setTextAlign(Paint.Align.RIGHT);text(c,number(load)+"%",r.right,barY-12,28,white,digits);p.setTextAlign(Paint.Align.LEFT);
-            if(nerv)nervSegments(c,r.left,barY,r.width(),18,load,color,18);
-            else {box(c,r.left,barY,r.width(),7,surface(0xFF263446,35));if(Float.isFinite(load))box(c,r.left,barY,r.width()*Math.max(0,Math.min(1,load/100)),7,color);}
-            if(r.bottom-barY>44)loadSpark(c,r.left,barY+28,r.width(),r.bottom-barY-29,series+2,color);
+        if(showTemperature){
+            float size=bounded(Math.min(r.width()*.32f,r.height()*.23f),26,64),baseline=r.top+31+size;
+            text(c,UiText.get("ТЕМПЕРАТУРА"),r.left,r.top+16,10,muted,medium);
+            valueWithUnit(c,number(temperature),r.left,baseline,size,"°C",bounded(size*.32f,12,22),size*.35f,thermal);
+            float plotTop=baseline+8;
+            float available=(showLoad?r.top+r.height()*.80f-39:r.bottom-5)-plotTop;
+            trend(c,prefix+".temperature",r.left,plotTop,r.width(),Math.max(4,Math.min(30,available)),thermal,false);
+        }
+        if(showLoad){
+            float barY=showTemperature?r.top+r.height()*.80f:r.top+50;
+            text(c,UiText.get("ЗАГРУЗКА"),r.left,barY-10,10,muted,medium);
+            p.setTextAlign(Paint.Align.RIGHT);fit(c,number(load)+"%",r.right,barY-8,26,r.width()*.48f,white);p.setTextAlign(Paint.Align.LEFT);
+            nervSegments(c,r.left,barY,r.width(),14,load,color,18);
+            if(r.bottom-barY>38)loadSpark(c,r.left,barY+23,r.width(),r.bottom-barY-24,series+2,color);
         }
     }
     private void cooling(Canvas c,float w,float h) {

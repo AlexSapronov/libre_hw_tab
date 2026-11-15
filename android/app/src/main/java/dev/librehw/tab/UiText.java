@@ -254,6 +254,7 @@ final class UiText {
         map.put("ПОВТОРИТЬ ЗАПУСК","RETRY WAKE");
         map.put("ПК не ответил за 1 минуту. Проверь питание и Wake-on-LAN.","No response after 1 minute. Check power and Wake-on-LAN.");
         map.put("Не удалось отправить команду пробуждения","Could not send wake command");
+        map.put("ЗАГРУЗКА","LOAD");
         EN=Collections.unmodifiableMap(map);
     }
 }
