@@ -255,6 +255,16 @@ final class UiText {
         map.put("ПК не ответил за 1 минуту. Проверь питание и Wake-on-LAN.","No response after 1 minute. Check power and Wake-on-LAN.");
         map.put("Не удалось отправить команду пробуждения","Could not send wake command");
         map.put("ЗАГРУЗКА","LOAD");
+        map.put("ЗАПУСК ПРЕРВАН","STARTUP ABORTED");
+        map.put("СВЯЗЬ УСТАНОВЛЕНА","LINK ESTABLISHED");
+        map.put("ПОДАЧА ПИТАНИЯ","POWER INITIATION");
+        map.put("ИНИЦИАЛИЗАЦИЯ MAGI","MAGI INITIALIZATION");
+        map.put("СИНХРОНИЗАЦИЯ ИНТЕРФЕЙСА","INTERFACE SYNCHRONIZATION");
+        map.put("ОЖИДАНИЕ ТЕЛЕМЕТРИИ","AWAITING TELEMETRY");
+        map.put("ЛОКАЛЬНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ / СОСТОЯНИЕ ПК ПОДТВЕРЖДАЕТСЯ ТЕЛЕМЕТРИЕЙ","LOCAL STARTUP SEQUENCE / PC STATE VERIFIED BY TELEMETRY");
+        map.put("НАЗАД К ЧАСАМ","BACK TO CLOCK");
+        map.put("ОТКРЫТИЕ КАНАЛА УПРАВЛЕНИЯ","OPENING CONTROL CHANNEL");
+        map.put("ОЖИДАНИЕ ОТВЕТА ПК","WAITING FOR PC RESPONSE");
         EN=Collections.unmodifiableMap(map);
     }
 }
